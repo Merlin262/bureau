@@ -63,7 +63,7 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
             if (space > slash && line[slash..space].Contains("-security")) security++;
         }
         // Atualizações em liberação gradual do Ubuntu ("phased"): o apt as segura de propósito.
-        var phased = await PhasedAsync(ct);
+        var phased = await PhasedAsync(names, ct);
         _packages = [.. names.Where(n => !phased.Contains(n)).Order()];
         _phased = names.Count(phased.Contains);
         _security = security;
@@ -71,17 +71,20 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
     }
 
     /// <summary>Simulação (não precisa de root): lista o bloco "deferred due to phasing".</summary>
-    static async Task<HashSet<string>> PhasedAsync(CancellationToken ct)
+    /// <summary>
+    /// Pacotes em liberação gradual: o "apt-cache policy" marca a versão nova com "(phased N%)".
+    /// Não depende do texto de saída do apt-get (que muda entre versões do apt).
+    /// </summary>
+    static async Task<HashSet<string>> PhasedAsync(IReadOnlyCollection<string> packages, CancellationToken ct)
     {
         var set = new HashSet<string>();
-        var r = await Proc.RunAsync("apt-get", ["-s", "-o", "Debug::NoLocking=1", "upgrade"], 60_000, ct);
-        var inBlock = false;
+        if (packages.Count == 0) return set;
+        var r = await Proc.RunAsync("apt-cache", ["policy", .. packages], 60_000, ct);
+        string? current = null;
         foreach (var line in r.Out.Split('\n'))
         {
-            if (line.Contains("deferred due to phasing")) { inBlock = true; continue; }
-            if (!inBlock) continue;
-            if (!line.StartsWith(' ')) break;
-            foreach (var p in line.Split(' ', StringSplitOptions.RemoveEmptyEntries)) set.Add(p);
+            if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line.EndsWith(':')) current = line[..^1].Split(':')[0];
+            else if (current is not null && line.Contains("(phased")) set.Add(current);
         }
         return set;
     }
