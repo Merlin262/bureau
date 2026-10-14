@@ -251,6 +251,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 Environment=DEBIAN_FRONTEND=noninteractive
+# needrestart pergunta quais serviços reiniciar; sem terminal isso pode travar o apt
+Environment=NEEDRESTART_MODE=a
 ExecStart=/usr/bin/apt-get update
 ExecStart=/usr/bin/apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold --with-new-pkgs upgrade
 TimeoutStartSec=1h
