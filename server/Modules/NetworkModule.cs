@@ -17,6 +17,9 @@ public sealed class NetworkModule
     readonly AlertEngine _alerts;
     readonly string _aliasPath, _knownPath;
     readonly ConcurrentDictionary<string, long> _firstSeen;
+    readonly ConcurrentDictionary<string, string> _lastIp = new(StringComparer.OrdinalIgnoreCase);
+    readonly ConcurrentDictionary<string, long> _lastSeen = new(StringComparer.OrdinalIgnoreCase);
+    readonly string _seenPath;
     readonly ConcurrentDictionary<string, (string? Name, DateTime At)> _dns = new();
     readonly ConcurrentDictionary<string, string> _aliases;
     DeviceInfo[] _last = [];
@@ -28,6 +31,12 @@ public sealed class NetworkModule
         _alerts = alerts;
         _aliasPath = Path.Combine(o.Value.DataDir, "aliases.json");
         _knownPath = Path.Combine(o.Value.DataDir, "known-devices.json");
+        _seenPath = Path.Combine(o.Value.DataDir, "last-seen.json");
+        foreach (var (mac, v) in JsonFile.Load(_seenPath, AppJson.Default.DictionaryStringString) ?? [])
+        {
+            var parts = v.Split('|');
+            if (parts.Length == 2 && long.TryParse(parts[1], out var ts)) { _lastIp[mac] = parts[0]; _lastSeen[mac] = ts; }
+        }
         _firstSeen = new(JsonFile.Load(_knownPath, AppJson.Default.DictionaryStringInt64) ?? [], StringComparer.OrdinalIgnoreCase);
         _aliases = new(JsonFile.Load(_aliasPath, AppJson.Default.DictionaryStringString) ?? [], StringComparer.OrdinalIgnoreCase);
     }
@@ -49,6 +58,23 @@ public sealed class NetworkModule
         TrackNew(raw);
         _last = raw;
         _hub.Publish("network", [.. raw.Select(Decorate)], AppJson.Default.DeviceInfoArray);
+    }
+
+    DateTime _seenSavedAt = DateTime.MinValue;
+
+    void RememberSeen(IEnumerable<DeviceInfo> online)
+    {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        foreach (var d in online.Where(d => d.Online))
+        {
+            var mac = d.Mac.ToLowerInvariant();
+            _lastIp[mac] = d.Ip;
+            _lastSeen[mac] = now;
+        }
+        if (DateTime.UtcNow - _seenSavedAt < TimeSpan.FromMinutes(10)) return; // grava no máximo a cada 10 min
+        _seenSavedAt = DateTime.UtcNow;
+        JsonFile.Save(_seenPath, _lastSeen.ToDictionary(kv => kv.Key, kv => $"{_lastIp.GetValueOrDefault(kv.Key)}|{kv.Value}"),
+            AppJson.Default.DictionaryStringString);
     }
 
     /// <summary>Aparelho nunca visto antes → alerta. Na primeira execução só aprende os que já existem.</summary>
@@ -93,6 +119,12 @@ public sealed class NetworkModule
         }
 
         var cutoff = DateTimeOffset.UtcNow.AddDays(-7).ToUnixTimeSeconds();
+        RememberSeen(byMac.Values);
+        // Aparelhos vistos nos últimos 7 dias continuam na lista (offline) — essencial para o Wake-on-LAN.
+        foreach (var (seenMac, ts) in _lastSeen)
+            if (ts > cutoff && !byMac.ContainsKey(seenMac) && _lastIp.TryGetValue(seenMac, out var lastIp))
+                byMac[seenMac] = new DeviceInfo(lastIp, seenMac, null, null, false, null);
+
         foreach (var d in await _pihole.GetDevicesAsync(ct))
         {
             if (d.Mac.StartsWith("ip-") || d.Mac.Length != 17) continue;
@@ -139,8 +171,25 @@ public sealed class NetworkModule
         Array.Fill(packet, (byte)0xFF, 0, 6);
         for (var i = 0; i < 16; i++) m.CopyTo(packet, 6 + i * 6);
 
+        // Envia para o broadcast geral e para o broadcast de cada sub-rede (alguns roteadores só repassam este),
+        // nas portas 9 e 7 — as duas usadas por placas de rede para o "pacote mágico".
+        var targets = new HashSet<IPAddress> { IPAddress.Broadcast };
+        foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (nic.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up ||
+                nic.NetworkInterfaceType == System.Net.NetworkInformation.NetworkInterfaceType.Loopback) continue;
+            foreach (var ua in nic.GetIPProperties().UnicastAddresses)
+            {
+                if (ua.Address.AddressFamily != AddressFamily.InterNetwork || ua.IPv4Mask is null) continue;
+                var ip = ua.Address.GetAddressBytes();
+                var mask = ua.IPv4Mask.GetAddressBytes();
+                targets.Add(new IPAddress([.. ip.Select((b, i) => (byte)(b | ~mask[i]))]));
+            }
+        }
         using var udp = new UdpClient { EnableBroadcast = true };
-        await udp.SendAsync(packet, new IPEndPoint(IPAddress.Broadcast, 9));
+        foreach (var t in targets)
+            foreach (var port in new[] { 9, 7 })
+                try { await udp.SendAsync(packet, new IPEndPoint(t, port)); } catch { /* interface sem rota */ }
         return true;
     }
 }
