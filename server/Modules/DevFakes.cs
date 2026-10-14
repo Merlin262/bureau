@@ -82,7 +82,7 @@ public static class DevFakes
     public static AptState Apt() => new(true, 7, 2,
         ["base-files", "curl", "libcurl4t64", "linux-firmware", "openssl", "libssl3t64", "tzdata"],
         true, ["linux-image-6.12.48-amd64"], DateTimeOffset.UtcNow.AddMinutes(-42).ToUnixTimeSeconds(), false, "success",
-        DateTimeOffset.UtcNow.AddDays(-3).ToUnixTimeSeconds());
+        DateTimeOffset.UtcNow.AddDays(-3).ToUnixTimeSeconds(), 5);
 
     public static BackupInfo[] Backups()
     {

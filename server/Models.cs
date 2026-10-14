@@ -54,7 +54,7 @@ public sealed record MeResponse(bool Authenticated, string? Hostname, string Ver
 
 // ── Pacotes / Backups / Integrações ──────────────────────
 public sealed record AptState(bool Supported, int Total, int Security, string[] Packages, bool RebootRequired,
-    string[] RebootPackages, long CheckedAt, bool Upgrading, string? LastResult, long LastRunAt);
+    string[] RebootPackages, long CheckedAt, bool Upgrading, string? LastResult, long LastRunAt, int Phased = 0);
 public sealed record BackupInfo(string Name, string Unit, string Status, long LastRun, long LastSuccess, long NextRun, string? Message);
 public sealed record HaEntity(string Id, string Name, string Domain, string State, string? Unit);
 public sealed record NamedCount(string Name, int Count);

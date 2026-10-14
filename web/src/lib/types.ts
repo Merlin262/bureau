@@ -26,7 +26,7 @@ export interface AlertEvent { ts: number; kind: string; level: 'crit' | 'warn' |
 export interface DeviceSummary { id: string; name: string; kind: 'app' | 'fcm' | 'apns' | 'webpush'; created: number; current: boolean }
 export interface PushConfig { webPushKey: string; fcm: boolean; ntfy: boolean; deviceId?: string; apns: boolean }
 export interface UpdateStatus { current: string; latest?: string; status: 'atualizado' | 'atualizando' | 'erro' | 'nunca'; message?: string; checkedAt: number; auto: boolean; supported: boolean }
-export interface AptState { supported: boolean; total: number; security: number; packages: string[]; rebootRequired: boolean; rebootPackages: string[]; checkedAt: number; upgrading: boolean; lastResult?: string; lastRunAt: number }
+export interface AptState { supported: boolean; total: number; security: number; packages: string[]; rebootRequired: boolean; rebootPackages: string[]; checkedAt: number; upgrading: boolean; lastResult?: string; lastRunAt: number; phased: number }
 export interface BackupInfo { name: string; unit: string; status: 'ok' | 'running' | 'failed' | 'stale' | 'unknown'; lastRun: number; lastSuccess: number; nextRun: number; message?: string }
 export interface NamedCount { name: string; count: number }
 export interface HaEntity { id: string; name: string; domain: string; state: string; unit?: string }

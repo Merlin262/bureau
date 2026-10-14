@@ -203,9 +203,17 @@
       <div class="apt-stats">
         <div><div class="mid num">{apt.total}</div><span class="mono dim">PENDENTES</span></div>
         <div><div class="mid num" class:red={apt.security > 0}>{apt.security}</div><span class="mono dim">SEGURANÇA</span></div>
+        {#if apt.phased > 0}
+          <div title="Liberação gradual do Ubuntu: o apt segura de propósito e instala nos próximos dias">
+            <div class="mid num dim">{apt.phased}</div><span class="mono dim">ADIADOS</span>
+          </div>
+        {/if}
       </div>
+      {#if apt.phased > 0}
+        <p class="dim small">{apt.phased} pacote(s) em liberação gradual do Ubuntu — entram sozinhos nos próximos dias.</p>
+      {/if}
       {#if apt.rebootRequired}
-        <p class="mono red warn">▲ REINICIALIZAÇÃO NECESSÁRIA{apt.rebootPackages.length ? ` (${apt.rebootPackages.slice(0, 3).join(', ')})` : ''}</p>
+        <p class="mono red warn">▲ REINICIALIZAÇÃO NECESSÁRIA{apt.rebootPackages.length ? ` (${apt.rebootPackages.slice(0, 3).join(', ')})` : ''} — reinicie em Energia para aplicar</p>
       {/if}
       <p class="dim small">
         {apt.upgrading ? 'Atualizando pacotes agora…' : `Verificado ${when(apt.checkedAt)}`}

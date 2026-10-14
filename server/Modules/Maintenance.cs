@@ -14,6 +14,7 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
 
     string[] _packages = [];
     int _security;
+    int _phased;
     long _checkedAt;
     bool _wasUpgrading;
     DateTime _nextList = DateTime.MinValue;
@@ -42,7 +43,7 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
                 try { rebootPkgs = [.. File.ReadAllLines("/var/run/reboot-required.pkgs").Where(l => l.Length > 0).Distinct()]; }
                 catch { /* lista opcional */ }
             }
-            state = new AptState(true, _packages.Length, _security, _packages, reboot, rebootPkgs, _checkedAt, upgrading, result, lastRun);
+            state = new AptState(true, _packages.Length, _security, _packages, reboot, rebootPkgs, _checkedAt, upgrading, result, lastRun, _phased);
         }
         hub.Publish("apt", state, AppJson.Default.AptState);
         alerts.OnApt(state);
@@ -61,9 +62,28 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
             var space = line.IndexOf(' ', slash);
             if (space > slash && line[slash..space].Contains("-security")) security++;
         }
-        _packages = [.. names.Order()];
+        // Atualizações em liberação gradual do Ubuntu ("phased"): o apt as segura de propósito.
+        var phased = await PhasedAsync(ct);
+        _packages = [.. names.Where(n => !phased.Contains(n)).Order()];
+        _phased = names.Count(phased.Contains);
         _security = security;
         _checkedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
+
+    /// <summary>Simulação (não precisa de root): lista o bloco "deferred due to phasing".</summary>
+    static async Task<HashSet<string>> PhasedAsync(CancellationToken ct)
+    {
+        var set = new HashSet<string>();
+        var r = await Proc.RunAsync("apt-get", ["-s", "-o", "Debug::NoLocking=1", "upgrade"], 60_000, ct);
+        var inBlock = false;
+        foreach (var line in r.Out.Split('\n'))
+        {
+            if (line.Contains("deferred due to phasing")) { inBlock = true; continue; }
+            if (!inBlock) continue;
+            if (!line.StartsWith(' ')) break;
+            foreach (var p in line.Split(' ', StringSplitOptions.RemoveEmptyEntries)) set.Add(p);
+        }
+        return set;
     }
 
     async Task<(bool Upgrading, string? Result, long LastRun)> UnitStateAsync(CancellationToken ct)
