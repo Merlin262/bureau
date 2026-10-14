@@ -5,8 +5,12 @@ import { go, type ViewId } from './router.svelte'
 
 const KEY = 'bureau.pushId'
 
-/** O build do app só inclui o Firebase se houver google-services.json (VITE_FCM=1). Sem ele, register() derruba o app. */
-export const nativePushAvailable = isNative && platform === 'android' && import.meta.env.VITE_FCM === '1'
+/**
+ * Android: só com Firebase no build (google-services.json + VITE_FCM=1); sem ele, register() derruba o app.
+ * iPhone: APNs direto (precisa da capacidade "Push Notifications" no Xcode e da chave .p8 no servidor).
+ */
+export const nativePushAvailable = isNative && ((platform === 'android' && import.meta.env.VITE_FCM === '1') || platform === 'ios')
+const nativeKind = platform === 'ios' ? 'apns' : 'fcm'
 export const webPushAvailable =
   !isNative && typeof window !== 'undefined' && window.isSecureContext && 'serviceWorker' in navigator && 'PushManager' in window
 
@@ -47,7 +51,7 @@ async function enableNative(): Promise<OkResponse> {
   if (perm.receive !== 'granted') perm = await PushNotifications.requestPermissions()
   if (perm.receive !== 'granted') return { ok: false, message: 'Permissão de notificação negada' }
 
-  await PushNotifications.createChannel({
+  if (platform === 'android') await PushNotifications.createChannel({
     id: 'alerts',
     name: 'Alertas do servidor',
     description: 'Serviço caiu, queda de energia, disco cheio…',
@@ -68,13 +72,13 @@ async function enableNative(): Promise<OkResponse> {
       resolve(r)
     }
     const ok = PushNotifications.addListener('registration', async (t) => {
-      try { finish(await api.pushRegister({ kind: 'fcm', name: deviceName(), token: t.value })) }
+      try { finish(await api.pushRegister({ kind: nativeKind, name: deviceName(), token: t.value })) }
       catch (e) { finish({ ok: false, message: String(e) }) }
     })
     const fail = PushNotifications.addListener('registrationError', (e) =>
       finish({ ok: false, message: `Falha no registro: ${e.error}` }))
     PushNotifications.register()
-    setTimeout(() => finish({ ok: false, message: 'Tempo esgotado ao registrar no Firebase' }), 20_000)
+    setTimeout(() => finish({ ok: false, message: platform === 'ios' ? 'Tempo esgotado ao registrar no APNs' : 'Tempo esgotado ao registrar no Firebase' }), 20_000)
   })
 }
 
@@ -89,7 +93,7 @@ export async function initNativePush() {
   // Renova o token silenciosamente se as notificações já estavam ativas.
   if (pushRegisteredId() && (await PushNotifications.checkPermissions()).receive === 'granted') {
     PushNotifications.addListener('registration', (t) =>
-      api.pushRegister({ kind: 'fcm', name: deviceName(), token: t.value }).then(remember).catch(() => {}))
+      api.pushRegister({ kind: nativeKind, name: deviceName(), token: t.value }).then(remember).catch(() => {}))
     PushNotifications.register()
   }
 }

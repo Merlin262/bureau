@@ -11,7 +11,12 @@
     "FcmServiceAccount": "/etc/bureau/firebase.json",
     "WebPushSubject": "mailto:voce@exemplo.com",
     "NtfyUrl": "",
-    "NtfyToken": ""
+    "NtfyToken": "",
+    "Apns": { "KeyFile": "/etc/bureau/apns.p8", "KeyId": "ABC123DEFG", "TeamId": "XYZ987TEAM", "BundleId": "dev.bureau.app", "Sandbox": true }
   },
+  "HomeAssistant": { "Enabled": true, "Url": "http://127.0.0.1:8123", "Token": "token-de-longa-duracao", "Entities": [] },
+  "Jellyfin": { "Enabled": true, "Url": "http://127.0.0.1:8096", "ApiKey": "chave-de-api" },
+  "Backups": [ { "Name": "Fotos", "Unit": "restic-fotos.service", "MaxAgeHours": 26 } ],
+  "SystemUpdates": true,
   "Logging": { "LogLevel": { "Default": "Warning", "bureau": "Information", "Microsoft.Hosting.Lifetime": "Information" } }
 }

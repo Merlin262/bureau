@@ -127,13 +127,18 @@ public sealed class NetworkModule
 /// devagar quando ninguém está conectado (o suficiente para os alertas de push).
 /// </summary>
 public sealed class Collectors(EventHub hub, ServicesModule services, DockerModule docker,
-    PiHoleModule pihole, NetworkModule network, ILogger<Collectors> log) : BackgroundService
+    PiHoleModule pihole, NetworkModule network, AptModule apt, BackupsModule backups,
+    HomeAssistantModule ha, JellyfinModule jellyfin, ILogger<Collectors> log) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken ct) => Task.WhenAll(
         Loop("services", services.RefreshAsync, 4, 15, ct),
         Loop("containers", docker.RefreshAsync, 4, 15, ct),
         Loop("pihole", pihole.RefreshAsync, 5, 30, ct),
-        Loop("network", network.RefreshAsync, 20, 300, ct));
+        Loop("network", network.RefreshAsync, 20, 300, ct),
+        Loop("apt", apt.RefreshAsync, 10, 120, ct),          // lista do apt só a cada 6 h (interno)
+        Loop("backups", backups.RefreshAsync, 15, 120, ct),
+        Loop("homeassistant", ha.RefreshAsync, 5, 60, ct),
+        Loop("jellyfin", jellyfin.RefreshAsync, 5, 60, ct));
 
     async Task Loop(string name, Func<CancellationToken, Task> refresh, int activeSec, int idleSec, CancellationToken ct)
     {

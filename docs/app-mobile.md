@@ -23,6 +23,10 @@ O app do BUREAU é a **mesma interface** do painel web, empacotada com [Capacito
 | **Disco quase cheio** | Uso ≥ `Alerts.DiskPercent` (90%) |
 | **Temperatura alta** | CPU ≥ `Alerts.TempCelsius` (85 °C) por mais de 1 minuto |
 | **Pi-hole fora do ar / voltou** | Três verificações seguidas sem resposta |
+| **Home Assistant / Jellyfin fora do ar** | Três verificações seguidas sem resposta |
+| **Backup falhou / atrasado** | A última execução terminou com erro, ou não há sucesso há mais de `MaxAgeHours` |
+| **Atualizações de segurança** | Surgem pacotes com correções de segurança pendentes |
+| **Reinicialização necessária** | Uma atualização (ex.: kernel) pede reiniciar o servidor |
 
 Ações feitas pela própria interface (ex.: você clicou em *Parar*) **não** geram alerta. O mesmo alerta não se repete por 5 minutos. Os últimos 50 ficam em *Painel → Registro de ocorrências*.
 
@@ -92,7 +96,23 @@ Localmente, crie `web/android/keystore.properties` (`storeFile=../release.jks`, 
 
 ### iOS
 
-Requer um Mac com Xcode: `cd web && npm run ios:sync && npx cap open ios`. Com um Apple ID gratuito o app roda no seu iPhone por 7 dias a cada instalação; a conta paga da Apple (US$ 99/ano) remove esse limite. O push **nativo** no iOS ainda não está implementado no app — no iPhone, use o Web Push (PWA) ou o ntfy, que funcionam sem custo.
+Requer um Mac com Xcode: `cd web && npm run ios:sync && npx cap open ios`. Com um Apple ID gratuito o app roda no seu iPhone por 7 dias a cada instalação; a conta paga da Apple (US$ 99/ano) remove esse limite e é **obrigatória para o push nativo**. Sem ela, use o Web Push (PWA) ou o ntfy no iPhone, que funcionam sem custo.
+
+#### Push nativo no iPhone (APNs)
+
+1. No Xcode, em **App → Signing & Capabilities**, escolha seu time e confira a capacidade **Push Notifications** (o projeto já traz o `App.entitlements`; o Xcode completa o resto ao assinar).
+2. Em [developer.apple.com](https://developer.apple.com/account/resources/authkeys/list) → **Keys → +**, marque *Apple Push Notifications service (APNs)* e baixe a chave **.p8** (só dá para baixar uma vez). Anote o **Key ID** e o seu **Team ID** (canto superior direito).
+3. No servidor:
+   ```bash
+   sudo cp AuthKey_ABC123DEFG.p8 /etc/bureau/apns.p8
+   sudo chown root:bureau /etc/bureau/apns.p8 && sudo chmod 640 /etc/bureau/apns.p8
+   ```
+   e em `/etc/bureau/bureau.json`:
+   ```json
+   "Push": { "Apns": { "KeyFile": "/etc/bureau/apns.p8", "KeyId": "ABC123DEFG", "TeamId": "XYZ987TEAM", "BundleId": "dev.bureau.app", "Sandbox": true } }
+   ```
+   `Sandbox: true` para o app instalado pelo Xcode; `false` para TestFlight/App Store (se o ambiente estiver errado, o BUREAU tenta o outro sozinho).
+4. `sudo systemctl restart bureau` → no app: *Sistema → Notificações → Ativar → Testar*. O indicador **APPLE** fica aceso quando a chave é válida.
 
 ## Como funciona (para quem for mexer)
 

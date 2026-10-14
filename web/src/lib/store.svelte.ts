@@ -1,4 +1,4 @@
-import type { AlertEvent, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot } from './types'
+import type { AlertEvent, AptState, BackupInfo, HaState, JfState, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot } from './types'
 import { sfx } from './sfx'
 import { openStream } from './sse'
 import { conn, isNative, tap } from './platform'
@@ -20,6 +20,10 @@ class Store {
   pihole = $state.raw<PiHoleState | null>(null)
   network = $state.raw<DeviceInfo[] | null>(null)
   alerts = $state.raw<AlertEvent[]>([])
+  apt = $state.raw<AptState | null>(null)
+  backups = $state.raw<BackupInfo[] | null>(null)
+  homeassistant = $state.raw<HaState | null>(null)
+  jellyfin = $state.raw<JfState | null>(null)
 
   /** Ações em andamento: chave → rótulo (UI otimista). */
   pending = $state<Record<string, string>>({})
@@ -61,6 +65,10 @@ const handlers: Record<string, (v: never) => void> = {
   containers: (v: ContainersState) => (store.containers = v),
   pihole: (v: PiHoleState) => (store.pihole = v),
   network: (v: DeviceInfo[]) => (store.network = v),
+  apt: (v: AptState) => (store.apt = v),
+  backups: (v: BackupInfo[]) => (store.backups = v),
+  homeassistant: (v: HaState) => (store.homeassistant = v),
+  jellyfin: (v: JfState) => (store.jellyfin = v),
   alerts: (v: AlertEvent[]) => {
     // Alerta novo enquanto a interface está aberta → aviso na tela também.
     const fresh = v.filter((a) => a.ts > lastAlertTs)

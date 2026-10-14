@@ -232,6 +232,25 @@ sleep 1
 systemctl is-active --quiet bureau || die "O serviço não iniciou. Veja: journalctl -u bureau -n 50"
 ok "Serviço bureau ativo"
 
+# ── 5a. Atualização de pacotes do sistema (disparada pela interface) ──
+if [[ -x /usr/bin/apt-get ]]; then
+  cat >/etc/systemd/system/bureau-apt-upgrade.service <<'UNIT'
+[Unit]
+Description=BUREAU - atualização de pacotes do sistema (apt)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=DEBIAN_FRONTEND=noninteractive
+ExecStart=/usr/bin/apt-get update
+ExecStart=/usr/bin/apt-get -y -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold --with-new-pkgs upgrade
+TimeoutStartSec=1h
+UNIT
+  systemctl daemon-reload
+  ok "Atualização de pacotes pela interface disponível"
+fi
+
 # ── 5b. Atualização automática ────────────────────────────────
 if [[ -f "$PREFIX/update.sh" ]]; then
   cat >/etc/systemd/system/bureau-update.service <<UNIT

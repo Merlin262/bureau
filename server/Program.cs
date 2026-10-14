@@ -71,9 +71,15 @@ builder.Services.AddSingleton<DeviceTokens>();
 builder.Services.AddSingleton<PushStore>();
 builder.Services.AddSingleton<WebPushSender>();
 builder.Services.AddSingleton<FcmSender>();
+builder.Services.AddSingleton<ApnsSender>();
 builder.Services.AddSingleton<Notifier>();
 builder.Services.AddSingleton<AlertEngine>();
 builder.Services.AddSingleton<UpdateModule>();
+builder.Services.AddSingleton<AptModule>();
+builder.Services.AddSingleton<BackupsModule>();
+builder.Services.AddSingleton<HomeAssistantModule>();
+builder.Services.AddSingleton<JellyfinModule>();
+builder.Services.AddSingleton(new MetricsStore(opts.DataDir));
 builder.Services.AddHostedService<SystemMonitor>();
 builder.Services.AddHostedService<Collectors>();
 

@@ -83,8 +83,8 @@ public static class Api
         });
 
         // ── Notificações push ───────────────────────────────
-        api.MapGet("/push/config", (HttpContext ctx, WebPushSender web, FcmSender fcm, Notifier n) =>
-            TypedResults.Ok(new PushConfig(web.PublicKey, fcm.Configured, n.NtfyConfigured, ctx.User.FindFirst("device")?.Value)));
+        api.MapGet("/push/config", (HttpContext ctx, WebPushSender web, FcmSender fcm, ApnsSender apns, Notifier n) =>
+            TypedResults.Ok(new PushConfig(web.PublicKey, fcm.Configured, n.NtfyConfigured, ctx.User.FindFirst("device")?.Value, apns.Configured)));
 
         api.MapGet("/push/devices", (PushStore push) =>
             TypedResults.Ok(push.All.Select(d => new DeviceSummary(d.Id, d.Name, d.Kind, d.Created, false)).ToArray()));
@@ -94,15 +94,16 @@ public static class Api
             var valid = req.Kind switch
             {
                 "fcm" => !string.IsNullOrWhiteSpace(req.Token) && req.Token.Length < 4096,
+                "apns" => req.Token is { Length: >= 32 and <= 200 } && req.Token.All(Uri.IsHexDigit),
                 "webpush" => Uri.TryCreate(req.Endpoint, UriKind.Absolute, out var u) && u.Scheme == "https"
                              && !string.IsNullOrEmpty(req.P256dh) && !string.IsNullOrEmpty(req.Auth),
                 _ => false,
             };
             if (!valid) return TypedResults.Ok(new OkResponse(false, "Inscrição inválida"));
 
-            var name = string.IsNullOrWhiteSpace(req.Name) ? (req.Kind == "fcm" ? "Android" : "Navegador") : req.Name.Trim()[..Math.Min(req.Name.Trim().Length, 60)];
+            var name = string.IsNullOrWhiteSpace(req.Name) ? (req.Kind switch { "fcm" => "Android", "apns" => "iPhone", _ => "Navegador" }) : req.Name.Trim()[..Math.Min(req.Name.Trim().Length, 60)];
             var d = push.Upsert(new PushDevice(Guid.NewGuid().ToString("N")[..12], req.Kind, name,
-                req.Kind == "fcm" ? req.Token : null,
+                req.Kind is "fcm" or "apns" ? req.Token : null,
                 req.Kind == "webpush" ? req.Endpoint : null,
                 req.Kind == "webpush" ? req.P256dh : null,
                 req.Kind == "webpush" ? req.Auth : null,
@@ -187,6 +188,19 @@ public static class Api
 
         api.MapPut("/network/alias", (AliasRequest req, NetworkModule net) =>
             TypedResults.Ok(net.SetAlias(req.Mac, req.Name) ? new OkResponse(true, null) : new OkResponse(false, "MAC inválido")));
+
+        // ── Pacotes do sistema / backups ────────────────────
+        api.MapPost("/apt/upgrade", async (AptModule a) => TypedResults.Ok(await a.UpgradeAsync()));
+        api.MapPost("/apt/check", async (AptModule a) => { a.Recheck(); await a.RefreshAsync(); return TypedResults.Ok(new OkResponse(true, "Lista de pacotes atualizada")); });
+        api.MapGet("/apt/logs", async (AptModule a) => TypedResults.Ok(new LogsResponse(await a.LogsAsync())));
+        api.MapPost("/backups/{unit}/run", async (string unit, BackupsModule b) => TypedResults.Ok(await b.RunAsync(unit)));
+        api.MapGet("/backups/{unit}/logs", async (string unit, BackupsModule b) => TypedResults.Ok(new LogsResponse(await b.LogsAsync(unit))));
+
+        // ── Integrações ─────────────────────────────────────
+        api.MapPost("/homeassistant/toggle", async (EntityRequest req, HomeAssistantModule h) => TypedResults.Ok(await h.ToggleAsync(req.EntityId)));
+
+        // ── Histórico de métricas ───────────────────────────
+        api.MapGet("/metrics", (string? range, MetricsStore m) => TypedResults.Ok(m.Query(range ?? "24h")));
 
         // ── Atualizações ────────────────────────────────────
         api.MapGet("/update", async (UpdateModule u) => TypedResults.Ok(await u.GetAsync()));

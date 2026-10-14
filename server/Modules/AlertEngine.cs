@@ -29,6 +29,11 @@ public sealed class AlertEngine
     readonly Dictionary<string, string> _containers = [];
     readonly HashSet<string> _containersDown = [];
     readonly HashSet<string> _disksFull = [];
+    readonly Dictionary<string, string> _backups = [];
+    readonly Dictionary<string, int> _offline = [];
+    readonly HashSet<string> _down = [];
+    int _securityUpdates = -1;
+    bool? _rebootRequired; // null = ainda não observado (não alerta no início)
     DateTime? _dischargeSince, _hotSince;
     bool _outage, _lowBattery, _hot, _piDown;
     int _piFailures;
@@ -198,6 +203,64 @@ public sealed class AlertEngine
                 case "ok": Raise(key, "service", "ok", "cups voltou", "O serviço cups está ativo novamente.", "servicos"); break;
                 default: Raise(key, "service", "crit", "cups caiu", "O serviço cups falhou.", "servicos"); break;
             }
+        }
+    }
+
+    // ── Integrações (Home Assistant, Jellyfin…) ──────────
+    public void OnOnline(string key, string name, bool configured, bool online, string view)
+    {
+        if (!configured) return;
+        lock (_lock)
+        {
+            if (!online)
+            {
+                var n = _offline[key] = _offline.GetValueOrDefault(key) + 1;
+                if (n == 3 && _down.Add(key))
+                    Raise(key, key, "crit", $"{name} fora do ar", $"O {name} não está respondendo.", view);
+            }
+            else
+            {
+                _offline[key] = 0;
+                if (_down.Remove(key)) Raise($"{key}-ok", key, "ok", $"{name} voltou", $"O {name} está respondendo novamente.", view);
+            }
+        }
+    }
+
+    // ── Backups ──────────────────────────────────────────
+    public void OnBackups(BackupInfo[] items)
+    {
+        lock (_lock)
+        {
+            foreach (var b in items)
+            {
+                var had = _backups.TryGetValue(b.Unit, out var prev);
+                _backups[b.Unit] = b.Status;
+                if (!had || prev == b.Status) continue;
+                if (b.Status == "failed")
+                    Raise($"bk:{b.Unit}", "backup", "crit", $"Backup {b.Name} falhou", b.Message ?? "A última execução terminou com erro.", "sistema");
+                else if (b.Status == "stale")
+                    Raise($"bk-old:{b.Unit}", "backup", "warn", $"Backup {b.Name} atrasado", b.Message ?? "Sem execução bem-sucedida recente.", "sistema");
+                else if (b.Status == "ok" && prev is "failed" or "stale")
+                    Raise($"bk-ok:{b.Unit}", "backup", "ok", $"Backup {b.Name} em dia", "Execução concluída com sucesso.", "sistema");
+            }
+        }
+    }
+
+    // ── Pacotes do sistema ───────────────────────────────
+    public void OnApt(AptState s)
+    {
+        if (!s.Supported || s.CheckedAt == 0) return;
+        lock (_lock)
+        {
+            if (_securityUpdates == 0 && s.Security > 0)
+                Raise("apt-sec", "updates", "warn", "Atualizações de segurança",
+                    $"{s.Security} pacote(s) com correções de segurança aguardando instalação.", "sistema");
+            _securityUpdates = s.Security;
+
+            if (s.RebootRequired && _rebootRequired == false)
+                Raise("reboot", "updates", "warn", "Reinicialização necessária",
+                    "Pacotes atualizados (ex.: kernel) só valem após reiniciar o servidor.", "sistema");
+            _rebootRequired = s.RebootRequired;
         }
     }
 

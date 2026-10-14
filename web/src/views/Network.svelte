@@ -77,7 +77,10 @@
       <div class="mono num">{d.ip}</div>
       <div class="mono dim mac">{d.mac}</div>
       <div class="actions">
-        <button class="btn ghost" class:busy={!!store.pending[`wol:${d.mac}`]} onclick={() => wake(d.mac, label(d))}>Despertar</button>
+        {#if !d.online && !d.randomMac}
+          <button class="btn ghost" title="Wake-on-LAN: liga remotamente um PC desligado (precisa estar ativado na BIOS/placa de rede)"
+            class:busy={!!store.pending[`wol:${d.mac}`]} onclick={() => wake(d.mac, label(d))}>Ligar (WoL)</button>
+        {/if}
       </div>
     </div>
   {:else}
@@ -85,9 +88,10 @@
   {/each}
 </div>
 
-<p class="hint mono dim">TOQUE NO NOME PARA DAR UM APELIDO · "ALEATÓRIO" = CELULAR/TABLET COM MAC PRIVADO</p>
+<p class="hint mono dim">TOQUE NO NOME PARA DAR UM APELIDO · "ALEATÓRIO" = CELULAR/TABLET COM MAC PRIVADO · "LIGAR (WOL)" APARECE EM APARELHOS DESLIGADOS</p>
 
-<Panel label="WAKE-ON-LAN MANUAL" class="wol">
+<Panel label="LIGAR REMOTAMENTE (WAKE-ON-LAN)" class="wol">
+  <p class="dim small wol-help">Envia um "pacote mágico" que liga um computador desligado da rede — útil para PCs ligados por cabo com Wake-on-LAN ativado na BIOS.</p>
   <form class="wol-form" onsubmit={(e) => { e.preventDefault(); if (mac) wake(mac, mac) }}>
     <input class="field" placeholder="AA:BB:CC:DD:EE:FF" bind:value={mac} autocomplete="off" spellcheck="false" />
     <button class="btn" type="submit" disabled={!mac}>Enviar pacote</button>
@@ -107,6 +111,7 @@
   .hint { margin-top: 10px; font-size: 10px; }
   :global(.wol) { margin-top: 24px; max-width: 520px; }
   .wol-form { display: flex; gap: 8px; }
+  .wol-help { font-size: 13px; margin-bottom: 10px; }
 
   @media (hover: none) { .pen { opacity: 1; } }
   @media (max-width: 900px) {

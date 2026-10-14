@@ -23,6 +23,14 @@ export interface DeviceInfo { ip: string; mac: string; name?: string; vendor?: s
 export interface OkResponse { ok: boolean; message?: string }
 export interface Me { authenticated: boolean; hostname?: string; version: string; allowPower: boolean }
 export interface AlertEvent { ts: number; kind: string; level: 'crit' | 'warn' | 'ok'; title: string; body: string; view: string }
-export interface DeviceSummary { id: string; name: string; kind: 'app' | 'fcm' | 'webpush'; created: number; current: boolean }
-export interface PushConfig { webPushKey: string; fcm: boolean; ntfy: boolean; deviceId?: string }
+export interface DeviceSummary { id: string; name: string; kind: 'app' | 'fcm' | 'apns' | 'webpush'; created: number; current: boolean }
+export interface PushConfig { webPushKey: string; fcm: boolean; ntfy: boolean; deviceId?: string; apns: boolean }
 export interface UpdateStatus { current: string; latest?: string; status: 'atualizado' | 'atualizando' | 'erro' | 'nunca'; message?: string; checkedAt: number; auto: boolean; supported: boolean }
+export interface AptState { supported: boolean; total: number; security: number; packages: string[]; rebootRequired: boolean; rebootPackages: string[]; checkedAt: number; upgrading: boolean; lastResult?: string; lastRunAt: number }
+export interface BackupInfo { name: string; unit: string; status: 'ok' | 'running' | 'failed' | 'stale' | 'unknown'; lastRun: number; lastSuccess: number; nextRun: number; message?: string }
+export interface NamedCount { name: string; count: number }
+export interface HaEntity { id: string; name: string; domain: string; state: string; unit?: string }
+export interface HaState { configured: boolean; online: boolean; error?: string; version?: string; location?: string; total: number; unavailable: number; domains: NamedCount[]; entities: HaEntity[] }
+export interface JfSession { user: string; title: string; client?: string; device?: string; paused: boolean; progress: number; transcoding: boolean }
+export interface JfState { configured: boolean; online: boolean; error?: string; name?: string; version?: string; library: NamedCount[]; sessions: JfSession[] }
+export interface MetricsSeries { range: string; step: number; t: number[]; cpu: (number | null)[]; mem: (number | null)[]; temp: (number | null)[]; rx: (number | null)[]; tx: (number | null)[]; battery: (number | null)[] }

@@ -18,6 +18,10 @@ public sealed record HostInfo(
 
 public sealed record MetricsHistory(double[] Cpu, double[] Mem, double[] Rx, double[] Tx);
 
+/// <summary>Histórico persistido: T (unix s) e médias por intervalo; null = sem dado.</summary>
+public sealed record MetricsSeries(string Range, long Step, long[] T, double?[] Cpu, double?[] Mem, double?[] Temp,
+    double?[] Rx, double?[] Tx, double?[] Battery);
+
 // ── Serviços / Docker ────────────────────────────────────
 public sealed record ServiceInfo(string Unit, string Description, string Active, string Sub, int Pid, long Memory, long Since);
 public sealed record UnitEntry(string Unit, string Description, string Active);
@@ -48,6 +52,19 @@ public sealed record OkResponse(bool Ok, string? Message);
 public sealed record LogsResponse(string Text);
 public sealed record MeResponse(bool Authenticated, string? Hostname, string Version, bool AllowPower);
 
+// ── Pacotes / Backups / Integrações ──────────────────────
+public sealed record AptState(bool Supported, int Total, int Security, string[] Packages, bool RebootRequired,
+    string[] RebootPackages, long CheckedAt, bool Upgrading, string? LastResult, long LastRunAt);
+public sealed record BackupInfo(string Name, string Unit, string Status, long LastRun, long LastSuccess, long NextRun, string? Message);
+public sealed record HaEntity(string Id, string Name, string Domain, string State, string? Unit);
+public sealed record NamedCount(string Name, int Count);
+public sealed record HaState(bool Configured, bool Online, string? Error, string? Version, string? Location,
+    int Total, int Unavailable, NamedCount[] Domains, HaEntity[] Entities);
+public sealed record JfSession(string User, string Title, string? Client, string? Device, bool Paused, double Progress, bool Transcoding);
+public sealed record JfState(bool Configured, bool Online, string? Error, string? Name, string? Version,
+    NamedCount[] Library, JfSession[] Sessions);
+public sealed record EntityRequest(string EntityId);
+
 // ── Alertas / Push / Aparelhos ───────────────────────────
 public sealed record AlertEvent(long Ts, string Kind, string Level, string Title, string Body, string View);
 public sealed record PushDevice(string Id, string Kind, string Name, string? Token, string? Endpoint, string? P256dh, string? Auth, string? Owner, long Created);
@@ -55,7 +72,7 @@ public sealed record DeviceToken(string Id, string Name, string Hash, long Creat
 public sealed record TokenRequest(string? Password, string? Name);
 public sealed record TokenResponse(string Token, string Id);
 public sealed record PushRegisterRequest(string Kind, string? Name, string? Token, string? Endpoint, string? P256dh, string? Auth);
-public sealed record PushConfig(string WebPushKey, bool Fcm, bool Ntfy, string? DeviceId);
+public sealed record PushConfig(string WebPushKey, bool Fcm, bool Ntfy, string? DeviceId, bool Apns = false);
 public sealed record DeviceSummary(string Id, string Name, string Kind, long Created, bool Current);
 
 [JsonSourceGenerationOptions(
@@ -64,6 +81,13 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(SystemSnapshot))]
 [JsonSerializable(typeof(HostInfo))]
 [JsonSerializable(typeof(MetricsHistory))]
+[JsonSerializable(typeof(MetricsSeries))]
+[JsonSerializable(typeof(AptState))]
+[JsonSerializable(typeof(BackupInfo[]))]
+[JsonSerializable(typeof(HaState))]
+[JsonSerializable(typeof(JfState))]
+[JsonSerializable(typeof(EntityRequest))]
+[JsonSerializable(typeof(Dictionary<string, long>))]
 [JsonSerializable(typeof(ServiceInfo[]))]
 [JsonSerializable(typeof(UnitEntry[]))]
 [JsonSerializable(typeof(ContainersState))]

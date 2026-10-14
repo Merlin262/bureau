@@ -3,6 +3,8 @@
   import Panel from '../components/Panel.svelte'
   import Meter from '../components/Meter.svelte'
   import HoldButton from '../components/HoldButton.svelte'
+  import Sq from '../components/Sq.svelte'
+  import LogViewer from '../components/LogViewer.svelte'
   import { store, act, disconnect } from '../lib/store.svelte'
   import { api } from '../lib/api'
   import { sfx } from '../lib/sfx'
@@ -39,8 +41,7 @@
   let pushOn = $state(!!pushRegisteredId())
 
   const unavailable = $derived(
-    platform === 'ios' ? 'No iPhone, instale o BUREAU como app pelo Safari (Compartilhar → Adicionar à Tela de Início) para receber push.'
-    : isNative ? 'Este build do app não inclui o Firebase (google-services.json). Veja o README.'
+    isNative ? 'Este build do app não inclui o Firebase (google-services.json). Veja o README.'
     : !window.isSecureContext ? 'Push no navegador exige HTTPS — abra o BUREAU pelo endereço do Tailscale.'
     : 'Este navegador não suporta notificações push.',
   )
@@ -94,14 +95,24 @@
     return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : `há ${Math.round(m / 60)} h`
   }
 
-  const KIND: Record<string, string> = { app: 'SESSÃO DO APP', fcm: 'PUSH · ANDROID', webpush: 'PUSH · NAVEGADOR' }
+  // ── Pacotes e backups ──
+  const apt = $derived(store.apt)
+  let showPkgs = $state(false)
+  let aptLogs = $state(false)
+  let bkLogs = $state<string | null>(null)
+  const when = (unix: number) =>
+    unix ? new Date(unix * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
+  const BK: Record<string, string> = { ok: 'EM DIA', running: 'EXECUTANDO', failed: 'FALHOU', stale: 'ATRASADO', unknown: 'SEM DADOS' }
+  const bkSq = (st: string) => (st === 'ok' ? 'on' : st === 'running' ? 'busy' : st === 'failed' || st === 'stale' ? 'fail' : 'off')
+
+  const KIND: Record<string, string> = { app: 'SESSÃO DO APP', fcm: 'PUSH · ANDROID', apns: 'PUSH · IPHONE', webpush: 'PUSH · NAVEGADOR' }
   const date = (unix: number) => new Date(unix * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 
   const power = (a: 'reboot' | 'poweroff') =>
     act('power', a, () => api.power(a), a === 'reboot' ? 'Reiniciando o servidor…' : 'Desligando o servidor…')
 </script>
 
-<Title index="06" code="HOST" label="Sistema" />
+<Title index="07" code="HOST" label="Sistema" />
 
 <div class="grid cols">
   <Panel label="IDENTIFICAÇÃO">
@@ -133,12 +144,69 @@
 </div>
 
 <div class="grid cols">
+  <Panel label="PACOTES DO SISTEMA" alert={!!apt?.rebootRequired}>
+    {#if !apt}
+      <p class="empty">Consultando…</p>
+    {:else if !apt.supported}
+      <p class="mono dim">{apt.lastResult ?? 'DESATIVADO NA CONFIGURAÇÃO (SystemUpdates)'}</p>
+    {:else}
+      <div class="apt-stats">
+        <div><div class="mid num">{apt.total}</div><span class="mono dim">PENDENTES</span></div>
+        <div><div class="mid num" class:red={apt.security > 0}>{apt.security}</div><span class="mono dim">SEGURANÇA</span></div>
+      </div>
+      {#if apt.rebootRequired}
+        <p class="mono red warn">▲ REINICIALIZAÇÃO NECESSÁRIA{apt.rebootPackages.length ? ` (${apt.rebootPackages.slice(0, 3).join(', ')})` : ''}</p>
+      {/if}
+      <p class="dim small">
+        {apt.upgrading ? 'Atualizando pacotes agora…' : `Verificado ${when(apt.checkedAt)}`}
+        {#if apt.lastRunAt} · última atualização {when(apt.lastRunAt)} ({apt.lastResult === 'success' ? 'ok' : apt.lastResult}){/if}
+      </p>
+      {#if apt.total > 0}
+        <button class="link mono" onclick={() => (showPkgs = !showPkgs)}>{showPkgs ? '▾' : '▸'} VER PACOTES</button>
+        {#if showPkgs}<p class="pkgs mono">{apt.packages.join(' · ')}</p>{/if}
+      {/if}
+      <div class="actions top">
+        <HoldButton label={apt.upgrading ? 'Atualizando…' : 'Atualizar pacotes'} disabled={apt.upgrading || !!store.pending.apt}
+          onconfirm={() => act('apt', '', api.aptUpgrade)} />
+        <button class="btn" class:busy={!!store.pending.aptc} onclick={() => act('aptc', '', api.aptCheck)}>Reverificar</button>
+        <button class="btn ghost" class:on={aptLogs} onclick={() => (aptLogs = !aptLogs)}>Logs</button>
+      </div>
+      {#if aptLogs}<div class="logwrap"><LogViewer load={api.aptLogs} /></div>{/if}
+    {/if}
+  </Panel>
+
+  <Panel label="BACKUPS">
+    {#each store.backups ?? [] as b (b.unit)}
+      <div class="bk">
+        <Sq state={bkSq(b.status)} />
+        <div class="bk-info">
+          <div class="name">{b.name}</div>
+          <div class="mono dim tiny">ÚLTIMO SUCESSO {when(b.lastSuccess)} · PRÓXIMO {when(b.nextRun)}</div>
+          <div class="small" class:red={b.status === 'failed' || b.status === 'stale'}>{b.message}</div>
+        </div>
+        <span class="mono st" class:red={b.status === 'failed' || b.status === 'stale'}>{BK[b.status]}</span>
+        <div class="actions">
+          <button class="btn" class:busy={!!store.pending[`bk:${b.unit}`]} disabled={b.status === 'running'}
+            onclick={() => act(`bk:${b.unit}`, '', () => api.backupRun(b.unit))}>Executar</button>
+          <button class="btn ghost" class:on={bkLogs === b.unit} onclick={() => (bkLogs = bkLogs === b.unit ? null : b.unit)}>Logs</button>
+        </div>
+      </div>
+      {#if bkLogs === b.unit}<div class="logwrap"><LogViewer load={() => api.backupLogs(b.unit)} /></div>{/if}
+    {:else}
+      <p class="dim small">Nenhum backup configurado. Em <code>/etc/bureau/bureau.json</code>:</p>
+      <pre class="cfg">"Backups": [{'{'} "Name": "Fotos", "Unit": "restic-fotos.service", "MaxAgeHours": 26 {'}'}]</pre>
+      <p class="dim small">Qualquer serviço systemd serve (restic, borg, rsync…); se houver um <code>.timer</code> de mesmo nome, mostro a próxima execução.</p>
+    {/each}
+  </Panel>
+</div>
+
+<div class="grid cols">
   <Panel label="NOTIFICAÇÕES">
     {#if pushAvailable}
       <div class="pref">
         <div>
           <div class="name">Neste aparelho</div>
-          <div class="dim small">{nativePushAvailable ? 'Push nativo (Firebase)' : 'Web Push do navegador'} · serviço caiu, queda de energia, disco cheio…</div>
+          <div class="dim small">{nativePushAvailable ? (platform === 'ios' ? 'Push nativo (Apple)' : 'Push nativo (Firebase)') : 'Web Push do navegador'} · serviço caiu, queda de energia, disco cheio…</div>
         </div>
         <button class="btn" class:on={pushOn} class:busy={!!store.pending.push} onclick={togglePush}>{pushOn ? 'Ativadas' : 'Ativar'}</button>
       </div>
@@ -152,6 +220,7 @@
     <div class="chans mono dim">
       <span>WEB PUSH <b class:off={!cfg}>{cfg ? '●' : '○'}</b></span>
       <span>FIREBASE <b class:off={!cfg?.fcm}>{cfg?.fcm ? '●' : '○'}</b></span>
+      <span>APPLE <b class:off={!cfg?.apns}>{cfg?.apns ? '●' : '○'}</b></span>
       <span>NTFY <b class:off={!cfg?.ntfy}>{cfg?.ntfy ? '●' : '○'}</b></span>
     </div>
   </Panel>
@@ -182,7 +251,7 @@
       <button class="btn" onclick={logout}>Sair</button>
     </div>
     <div class="keys mono dim">
-      <span><kbd>1</kbd>–<kbd>6</kbd> SEÇÕES</span>
+      <span><kbd>1</kbd>–<kbd>7</kbd> SEÇÕES</span>
       <span><kbd>Q</kbd> <kbd>E</kbd> ANTERIOR / PRÓXIMA</span>
       <span><kbd>ESC</kbd> FECHAR</span>
     </div>
@@ -232,6 +301,20 @@
   .keys { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
   kbd { display: inline-block; min-width: 18px; padding: 0 4px; border: 1px solid var(--line-2); text-align: center; color: var(--fg); font-family: var(--mono); }
   .warn { margin-bottom: 12px; }
+  .apt-stats { display: flex; gap: 28px; margin-bottom: 10px; }
+  .mid { font-stretch: 70%; font-weight: 700; font-size: 34px; line-height: 1; }
+  .link { color: var(--fg-dim); font-size: 10px; margin-top: 8px; }
+  .link:hover { color: var(--fg); }
+  .pkgs { margin-top: 6px; font-size: 10.5px; color: var(--fg-dim); line-height: 1.6; }
+  .top { margin-top: 14px; }
+  .logwrap { margin: 10px -16px 0; }
+  .bk { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .bk .actions { grid-column: 2 / -1; }
+  .bk-info { min-width: 0; }
+  .tiny { font-size: 10px; margin: 2px 0; }
+  .st { font-size: 11px; white-space: nowrap; }
+  .cfg { margin: 10px 0; padding: 10px; background: #060607; font-family: var(--mono); font-size: 12px; overflow: auto; }
+  code { font-family: var(--mono); font-size: 12px; }
   .chans { display: flex; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
   .chans b { color: var(--fg); font-weight: 400; }
   .chans b.off { color: var(--fg-mute); }

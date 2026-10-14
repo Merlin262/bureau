@@ -7,6 +7,7 @@
   import PiHole from './views/PiHole.svelte'
   import Network from './views/Network.svelte'
   import System from './views/System.svelte'
+  import Apps from './views/Apps.svelte'
   import Toasts from './components/Toasts.svelte'
   import { store, connect, disconnect } from './lib/store.svelte'
   import { router, views, go, step, type ViewId } from './lib/router.svelte'
@@ -15,7 +16,7 @@
   import { conn, isNative, loadConnection } from './lib/platform'
   import { initNative } from './lib/native'
 
-  const VIEWS = { painel: Dashboard, servicos: Services, docker: Containers, pihole: PiHole, rede: Network, sistema: System }
+  const VIEWS = { painel: Dashboard, servicos: Services, docker: Containers, pihole: PiHole, rede: Network, apps: Apps, sistema: System }
   const View = $derived(VIEWS[router.current])
 
   let clock = $state('')
@@ -56,6 +57,8 @@
   const badges = $derived<Partial<Record<ViewId, string>>>({
     servicos: store.services?.some((s) => s.active === 'failed') ? '!' : undefined,
     pihole: store.pihole?.configured && (!store.pihole.online || !store.pihole.blocking) ? '!' : undefined,
+    apps: (store.homeassistant?.configured && !store.homeassistant.online) || (store.jellyfin?.configured && !store.jellyfin.online) ? '!' : undefined,
+    sistema: store.backups?.some((b) => b.status === 'failed' || b.status === 'stale') || store.apt?.rebootRequired ? '!' : undefined,
   })
 
   function nav(id: ViewId) {
@@ -117,7 +120,7 @@
         {/each}
       </ul>
       <div class="nav-foot mono">
-        <div class="mute">[Q] [E] NAVEGAR · [1–6] SALTAR</div>
+        <div class="mute">[Q] [E] NAVEGAR · [1–7] SALTAR</div>
         <div class="mute">BUREAU v{store.me?.version}</div>
       </div>
     </nav>
@@ -251,7 +254,7 @@
     .nav-item { flex-direction: column; align-items: center; gap: 2px; padding: 9px 2px 8px; }
     .idx { width: auto; font-size: 9px; }
     .full { display: none; }
-    .short { display: block; font-size: 15px; letter-spacing: 0.01em; }
+    .short { display: block; font-size: 13px; letter-spacing: 0; }
     .nav-item:hover .lbl { transform: none; }
     .badge { position: absolute; top: 4px; right: 6px; min-width: 14px; height: 14px; font-size: 9px; }
     .nav-foot { display: none; }

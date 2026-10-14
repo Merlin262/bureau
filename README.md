@@ -17,13 +17,14 @@
 
 | Módulo | Recursos |
 |---|---|
-| **Painel** | CPU (total e por núcleo), RAM/swap, tráfego, temperatura, uptime, **bateria do notebook como nobreak** (alerta de queda de energia), resumo de tudo com alertas |
+| **Painel** | CPU (total e por núcleo), RAM/swap, tráfego, temperatura, uptime, **bateria do notebook como nobreak** (alerta de queda de energia), resumo de tudo com alertas e **histórico de até 90 dias** (CPU, memória, temperatura, rede) |
 | **Serviços** | Serviços systemd monitorados: estado, memória, tempo ativo; iniciar/parar/reiniciar; logs do journal ao vivo; escolha quais monitorar pela interface |
 | **Contêineres** | Docker: estado, portas, iniciar/parar/reiniciar, logs |
 | **Pi-hole** | Estatísticas (v6), pausar bloqueio (5 min / 30 min / 1 h / indefinido), gráfico de 24 h, domínios mais bloqueados |
-| **Rede** | Dispositivos da LAN (ARP + nomes do Pi-hole + DNS reverso), online/offline, **Wake-on-LAN** |
-| **Sistema** | Informações do host, discos, reiniciar/desligar (segure para confirmar), notificações e aparelhos conectados, sons de interface |
-| **Alertas** | Push quando um serviço ou contêiner cai, falta energia (bateria do notebook), o disco enche, a CPU esquenta ou o Pi-hole para — com registro de ocorrências no painel |
+| **Rede** | Dispositivos da LAN (ARP + Pi-hole + DNS reverso), **fabricante pelo MAC**, **apelidos**, marcação de MAC aleatório, online/offline e **Wake-on-LAN** (liga PCs desligados) |
+| **Apps** | **Home Assistant** (resumo, luzes/interruptores com liga-desliga) e **Jellyfin** (biblioteca e quem está assistindo agora) |
+| **Sistema** | Informações do host, discos, **atualizações de pacotes (apt)** com aviso de segurança e de reinicialização, **backups** (último sucesso, próxima execução, executar agora), atualizações do BUREAU, notificações e aparelhos, reiniciar/desligar |
+| **Alertas** | Push quando um serviço ou contêiner cai, falta energia, o disco enche, a CPU esquenta, o Pi-hole/Home Assistant/Jellyfin param, um backup falha ou atrasa, surgem atualizações de segurança ou o sistema pede reinicialização |
 
 **App mobile:** o mesmo painel como app Android (APK nas releases), com push nativo. No iPhone, funciona como PWA com Web Push (o projeto iOS nativo também está incluído). Guia completo: [docs/app-mobile.md](docs/app-mobile.md).
 
@@ -93,6 +94,11 @@ Baixe o `bureau-android.apk` da release, informe o endereço do servidor e a sen
 | `Push.FcmServiceAccount` | `/etc/bureau/firebase.json` | Conta de serviço do Firebase (push no app Android) |
 | `Push.WebPushSubject` | `mailto:bureau@example.com` | Seu e-mail (exigido pelo Web Push/Apple) |
 | `Push.NtfyUrl` / `NtfyToken` | — | Tópico do ntfy, alternativa sem Firebase |
+| `Push.Apns.*` | — | Push nativo no iPhone (chave .p8 da Apple) — veja [docs/app-mobile.md](docs/app-mobile.md) |
+| `HomeAssistant.Enabled` / `Url` / `Token` / `Entities` | `false` / `http://127.0.0.1:8123` / — / `[]` | Token de longa duração; `Entities` escolhe o que aparece (vazio: luzes, interruptores, ventiladores) |
+| `Jellyfin.Enabled` / `Url` / `ApiKey` | `false` / `http://127.0.0.1:8096` / — | Chave em Painel → Avançado → Chaves de API |
+| `Backups` | `[]` | Lista de `{ "Name", "Unit", "MaxAgeHours" }` — serviços systemd de backup (restic, borg, rsync…) |
+| `SystemUpdates` | `true` | Mostra/aplica atualizações de pacotes (apt) |
 
 Trocar a senha:
 
@@ -162,9 +168,9 @@ install.sh / uninstall.sh / build.sh
 
 - [x] App mobile (Android; iOS via Capacitor/PWA)
 - [x] Notificações push (serviço caiu, queda de energia, disco cheio…)
-- [ ] Push nativo no iOS (APNs)
-- [ ] Mais integrações: Home Assistant, Jellyfin, backups, atualizações do apt
-- [ ] Histórico de métricas persistido (dias/semanas)
+- [x] Push nativo no iOS (APNs)
+- [x] Integrações: Home Assistant, Jellyfin, backups, atualizações do apt
+- [x] Histórico de métricas persistido (até 90 dias)
 
 ## Licença
 

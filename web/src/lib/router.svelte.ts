@@ -4,6 +4,7 @@ export const views = [
   { id: 'docker', label: 'Contêineres', short: 'Docker', code: 'DOCKER' },
   { id: 'pihole', label: 'Pi-hole', short: 'Pi-hole', code: 'DNS' },
   { id: 'rede', label: 'Rede', short: 'Rede', code: 'LAN' },
+  { id: 'apps', label: 'Apps', short: 'Apps', code: 'INTEGRAÇÕES' },
   { id: 'sistema', label: 'Sistema', short: 'Sistema', code: 'HOST' },
 ] as const
 

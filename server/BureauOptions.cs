@@ -16,6 +16,46 @@ public sealed class BureauOptions
     public PiHoleOptions PiHole { get; set; } = new();
     public AlertOptions Alerts { get; set; } = new();
     public PushOptions Push { get; set; } = new();
+    public HomeAssistantOptions HomeAssistant { get; set; } = new();
+    public JellyfinOptions Jellyfin { get; set; } = new();
+
+    /// <summary>Jobs de backup (serviços systemd, normalmente acionados por um .timer) a acompanhar.</summary>
+    public BackupJob[] Backups { get; set; } = [];
+
+    /// <summary>Mostrar e aplicar atualizações de pacotes do sistema (apt).</summary>
+    public bool SystemUpdates { get; set; } = true;
+}
+
+public sealed class HomeAssistantOptions
+{
+    public bool Enabled { get; set; }
+    public string Url { get; set; } = "http://127.0.0.1:8123";
+
+    /// <summary>Token de longa duração (Perfil → Segurança → Tokens de acesso de longa duração).</summary>
+    public string? Token { get; set; }
+
+    /// <summary>Entidades a exibir (ex.: "light.sala"). Vazio: luzes, interruptores e ventiladores.</summary>
+    public string[] Entities { get; set; } = [];
+}
+
+public sealed class JellyfinOptions
+{
+    public bool Enabled { get; set; }
+    public string Url { get; set; } = "http://127.0.0.1:8096";
+
+    /// <summary>Chave de API (Painel → Avançado → Chaves de API).</summary>
+    public string? ApiKey { get; set; }
+}
+
+public sealed class BackupJob
+{
+    public string Name { get; set; } = "";
+
+    /// <summary>Serviço que executa o backup (ex.: "restic-backup.service").</summary>
+    public string Unit { get; set; } = "";
+
+    /// <summary>Alerta se o último sucesso for mais antigo que isso.</summary>
+    public int MaxAgeHours { get; set; } = 26;
 }
 
 public sealed class AlertOptions
@@ -37,6 +77,21 @@ public sealed class PushOptions
     /// <summary>Tópico do ntfy (ex.: https://ntfy.sh/meu-topico-secreto) — alternativa sem Firebase.</summary>
     public string? NtfyUrl { get; set; }
     public string? NtfyToken { get; set; }
+
+    public ApnsOptions Apns { get; set; } = new();
+}
+
+/// <summary>Push nativo no iPhone (requer conta paga de desenvolvedor Apple).</summary>
+public sealed class ApnsOptions
+{
+    /// <summary>Chave .p8 de "Apple Push Notifications service" (Certificates, IDs &amp; Profiles → Keys).</summary>
+    public string? KeyFile { get; set; }
+    public string? KeyId { get; set; }
+    public string? TeamId { get; set; }
+    public string BundleId { get; set; } = "dev.bureau.app";
+
+    /// <summary>true para apps instalados pelo Xcode; false para TestFlight/App Store (o outro é tentado se falhar).</summary>
+    public bool Sandbox { get; set; } = true;
 }
 
 public sealed class DockerOptions

@@ -79,6 +79,46 @@ public static class DevFakes
             ], hist);
     }
 
+    public static AptState Apt() => new(true, 7, 2,
+        ["base-files", "curl", "libcurl4t64", "linux-firmware", "openssl", "libssl3t64", "tzdata"],
+        true, ["linux-image-6.12.48-amd64"], DateTimeOffset.UtcNow.AddMinutes(-42).ToUnixTimeSeconds(), false, "success",
+        DateTimeOffset.UtcNow.AddDays(-3).ToUnixTimeSeconds());
+
+    public static BackupInfo[] Backups()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return
+        [
+            new("Fotos (restic)", "restic-fotos.service", "ok", now.AddHours(-5).ToUnixTimeSeconds(), now.AddHours(-5).ToUnixTimeSeconds(), now.AddHours(19).ToUnixTimeSeconds(), "Em dia"),
+            new("Configurações", "backup-config.service", "failed", now.AddHours(-2).ToUnixTimeSeconds(), now.AddDays(-2).ToUnixTimeSeconds(), now.AddHours(22).ToUnixTimeSeconds(), "Última execução falhou (exit-code)"),
+        ];
+    }
+
+    static readonly Dictionary<string, string> HaStates = new()
+    {
+        ["light.sala"] = "on", ["light.quarto"] = "off", ["light.varanda"] = "off", ["switch.cafeteira"] = "off", ["fan.escritorio"] = "on",
+    };
+
+    public static void HaToggle(string id)
+    {
+        if (HaStates.TryGetValue(id, out var s)) HaStates[id] = s == "on" ? "off" : "on";
+    }
+
+    public static HaState HomeAssistant() => new(true, true, null, "2026.10.2", "Casa", 214, 3,
+        [new("sensor", 96), new("binary_sensor", 31), new("light", 12), new("switch", 9), new("automation", 18)],
+        [.. HaStates.Select(kv => new HaEntity(kv.Key, kv.Key.Split('.')[1] switch
+            {
+                "sala" => "Luz da sala", "quarto" => "Luz do quarto", "varanda" => "Luz da varanda",
+                "cafeteira" => "Cafeteira", _ => "Ventilador do escritório",
+            }, kv.Key.Split('.')[0], kv.Value, null))]);
+
+    public static JfState Jellyfin() => new(true, true, null, "jellyfin", "10.11.2",
+        [new("Filmes", 412), new("Séries", 57), new("Episódios", 2318)],
+        [
+            new("ana", "Ruptura · T02E04 Woe's Hollow", "Jellyfin Android TV", "TV da sala", false, 37.5, false),
+            new("convidado", "Arrival", "Jellyfin Web", "Chrome", true, 81.2, true),
+        ]);
+
     public static DeviceInfo[] Devices() =>
     [
         new("192.168.0.1", "a0:f4:79:11:22:33", "_gateway", null, true, "enp2s0"),

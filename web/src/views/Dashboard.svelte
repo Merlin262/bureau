@@ -4,6 +4,9 @@
   import Meter from '../components/Meter.svelte'
   import Spark from '../components/Spark.svelte'
   import Sq from '../components/Sq.svelte'
+  import HistoryChart from '../components/HistoryChart.svelte'
+  import { onDestroy } from 'svelte'
+  import type { MetricsSeries } from '../lib/types'
   import { store, act } from '../lib/store.svelte'
   import { api } from '../lib/api'
   import { go, type ViewId } from '../lib/router.svelte'
@@ -17,6 +20,21 @@
   const online = $derived(store.network?.filter((d) => d.online).length ?? 0)
   const onBattery = $derived(s?.battery?.status === 'Discharging')
   const ph = $derived(store.pihole)
+
+  // ── Histórico persistido ──
+  const RANGES = [['1h', '1H'], ['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D']] as const
+  let range = $state<string>((() => { try { return localStorage.getItem('bureau.range') ?? '24h' } catch { return '24h' } })())
+  let series = $state.raw<MetricsSeries | null>(null)
+  async function loadSeries() {
+    try { series = await api.metrics(range) } catch { /* offline */ }
+  }
+  $effect(() => {
+    range
+    try { localStorage.setItem('bureau.range', range) } catch { /* privado */ }
+    loadSeries()
+  })
+  const refresh = setInterval(loadSeries, 60_000)
+  onDestroy(() => clearInterval(refresh))
 
   const when = (ts: number) =>
     new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -130,6 +148,26 @@
   </button>
 </div>
 
+<Panel label="HISTÓRICO" class="history">
+  {#snippet aside()}
+    <span class="ranges">
+      {#each RANGES as [id, lbl]}
+        <button class="btn mini" class:on={range === id} onclick={() => (range = id)}>{lbl}</button>
+      {/each}
+    </span>
+  {/snippet}
+  {#if series && series.t.length > 1}
+    <div class="charts">
+      <HistoryChart label="PROCESSADOR" t={series.t} values={series.cpu} max={100} hot={90} format={(v) => `${v.toFixed(0)}%`} />
+      <HistoryChart label="MEMÓRIA" t={series.t} values={series.mem} max={100} hot={92} format={(v) => `${v.toFixed(0)}%`} />
+      <HistoryChart label="TEMPERATURA" t={series.t} values={series.temp} hot={85} format={(v) => `${v.toFixed(0)}°C`} />
+      <HistoryChart label="DOWNLOAD" t={series.t} values={series.rx} format={(v) => rate(v)} />
+    </div>
+  {:else}
+    <p class="empty">{series ? 'Coletando dados — o histórico aparece em alguns minutos.' : 'Carregando…'}</p>
+  {/if}
+</Panel>
+
 <section class="log">
   <header class="log-head mono"><span class="red">■</span> REGISTRO DE OCORRÊNCIAS <span class="rule"></span></header>
   {#each store.alerts.slice(0, 8) as a (a.ts + a.title)}
@@ -144,6 +182,9 @@
 </section>
 
 <style>
+  :global(.history) { margin-top: 14px; }
+  .ranges { display: flex; gap: 4px; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 24px; }
   .log { margin-top: 28px; }
   .log-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; color: var(--fg-dim); }
   .log-head .rule { flex: 1; height: 1px; background: var(--line); }

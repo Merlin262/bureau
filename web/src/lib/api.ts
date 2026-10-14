@@ -1,4 +1,4 @@
-import type { AlertEvent, DeviceSummary, Me, OkResponse, PushConfig, UnitEntry, UpdateStatus } from './types'
+import type { AlertEvent, DeviceSummary, Me, MetricsSeries, OkResponse, PushConfig, UnitEntry, UpdateStatus } from './types'
 import { store } from './store.svelte'
 import { conn } from './platform'
 
@@ -54,11 +54,18 @@ export const api = {
   alias: (mac: string, name: string) => req<OkResponse>('PUT', '/api/network/alias', { mac, name }),
   power: (action: 'reboot' | 'poweroff') => req<OkResponse>('POST', `/api/power/${action}`),
   updateStatus: () => req<UpdateStatus>('GET', '/api/update'),
+  metrics: (range: string) => req<MetricsSeries>('GET', `/api/metrics?range=${range}`),
+  aptUpgrade: () => req<OkResponse>('POST', '/api/apt/upgrade'),
+  aptCheck: () => req<OkResponse>('POST', '/api/apt/check'),
+  aptLogs: () => req<{ text: string }>('GET', '/api/apt/logs'),
+  backupRun: (unit: string) => req<OkResponse>('POST', `/api/backups/${enc(unit)}/run`),
+  backupLogs: (unit: string) => req<{ text: string }>('GET', `/api/backups/${enc(unit)}/logs`),
+  haToggle: (entityId: string) => req<OkResponse>('POST', '/api/homeassistant/toggle', { entityId }),
   updateRun: () => req<OkResponse>('POST', '/api/update/run'),
 
   pushConfig: () => req<PushConfig>('GET', '/api/push/config'),
   pushDevices: () => req<DeviceSummary[]>('GET', '/api/push/devices'),
-  pushRegister: (body: { kind: 'fcm' | 'webpush'; name: string; token?: string; endpoint?: string; p256dh?: string; auth?: string }) =>
+  pushRegister: (body: { kind: 'fcm' | 'apns' | 'webpush'; name: string; token?: string; endpoint?: string; p256dh?: string; auth?: string }) =>
     req<OkResponse>('POST', '/api/push/register', body),
   pushRemove: (id: string) => req<OkResponse>('DELETE', `/api/push/${enc(id)}`),
   pushTest: () => req<OkResponse>('POST', '/api/push/test'),

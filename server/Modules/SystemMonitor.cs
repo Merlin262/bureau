@@ -4,7 +4,7 @@ using Bureau.Infra;
 namespace Bureau.Modules;
 
 /// <summary>Amostra CPU/RAM/rede/temperatura a cada segundo e mantém 2 minutos de histórico.</summary>
-public sealed class SystemMonitor(EventHub hub, AlertEngine alerts, ILogger<SystemMonitor> log) : BackgroundService
+public sealed class SystemMonitor(EventHub hub, AlertEngine alerts, MetricsStore metrics, ILogger<SystemMonitor> log) : BackgroundService
 {
     const int HistoryLength = 120;
     readonly Ring _cpu = new(HistoryLength), _mem = new(HistoryLength), _rx = new(HistoryLength), _tx = new(HistoryLength);
@@ -43,6 +43,7 @@ public sealed class SystemMonitor(EventHub hub, AlertEngine alerts, ILogger<Syst
                 }
                 hub.Publish("sys", s, AppJson.Default.SystemSnapshot, dedupe: false);
                 alerts.OnSystem(s);
+                metrics.Add(s);
             }
             catch (Exception e)
             {

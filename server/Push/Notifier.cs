@@ -50,7 +50,7 @@ public sealed class PushStore
 }
 
 /// <summary>Entrega um alerta em todos os canais configurados.</summary>
-public sealed class Notifier(PushStore store, WebPushSender web, FcmSender fcm,
+public sealed class Notifier(PushStore store, WebPushSender web, FcmSender fcm, ApnsSender apns,
     IOptionsMonitor<BureauOptions> opts, ILogger<Notifier> log)
 {
     readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -68,6 +68,7 @@ public sealed class Notifier(PushStore store, WebPushSender web, FcmSender fcm,
                 {
                     "webpush" => await web.SendAsync(d, a),
                     "fcm" => await fcm.SendAsync(d, a),
+                    "apns" => await apns.SendAsync(d, a),
                     _ => PushResult.Gone,
                 };
                 if (r == PushResult.Gone)
