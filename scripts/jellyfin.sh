@@ -24,8 +24,11 @@ KEY=""
 if [[ -n "$KEY" ]]; then
   CONF=/etc/bureau/bureau.json
   [[ -f "$CONF" ]] || die "BUREAU não encontrado ($CONF)."
-  code=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Emby-Token: $KEY" http://127.0.0.1:8096/System/Info || true)
-  [[ "$code" == "200" ]] || die "O Jellyfin recusou a chave (HTTP $code). Confira em Painel → Chaves de API."
+  KEY=$(printf '%s' "$KEY" | tr -d '[:space:]"')
+  # Formato atual (Authorization: MediaBrowser Token=…); versões novas não aceitam mais o X-Emby-Token.
+  code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: MediaBrowser Token=\"$KEY\"" http://127.0.0.1:8096/System/Info || true)
+  [[ "$code" == "200" ]] || code=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Emby-Token: $KEY" http://127.0.0.1:8096/System/Info || true)
+  [[ "$code" == "200" ]] || die "O Jellyfin recusou a chave (HTTP $code). Confira em Painel → Chaves de API (copie a chave inteira)."
   JF_KEY="$KEY" python3 - "$CONF" <<'PY'
 import json, os, sys
 p = sys.argv[1]

@@ -168,8 +168,8 @@ public sealed class JellyfinModule(EventHub hub, AlertEngine alerts, IOptionsMon
     async Task<JsonDocument> GetAsync(string path, CancellationToken ct)
     {
         using var req = new HttpRequestMessage(HttpMethod.Get, O.Url.TrimEnd('/') + path);
-        req.Headers.TryAddWithoutValidation("Authorization", $"MediaBrowser Token=\"{O.ApiKey}\"");
-        req.Headers.TryAddWithoutValidation("X-Emby-Token", O.ApiKey ?? "");
+        // Formato atual; as versões novas do Jellyfin não aceitam mais o cabeçalho X-Emby-Token.
+        req.Headers.TryAddWithoutValidation("Authorization", $"MediaBrowser Token=\"{O.ApiKey?.Trim()}\"");
         using var res = await _http.SendAsync(req, ct);
         if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized) throw new InvalidOperationException("Chave de API do Jellyfin inválida");
         res.EnsureSuccessStatusCode();
