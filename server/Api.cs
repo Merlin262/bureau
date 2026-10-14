@@ -185,6 +185,9 @@ public static class Api
                 ? new OkResponse(true, "Pacote mágico enviado")
                 : new OkResponse(false, "MAC inválido")));
 
+        api.MapPut("/network/alias", (AliasRequest req, NetworkModule net) =>
+            TypedResults.Ok(net.SetAlias(req.Mac, req.Name) ? new OkResponse(true, null) : new OkResponse(false, "MAC inválido")));
+
         // ── Energia ─────────────────────────────────────────
         api.MapPost("/power/{action}", (string action, IOptionsMonitor<BureauOptions> o, ILogger<BureauOptions> log) =>
         {

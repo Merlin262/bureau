@@ -2,19 +2,62 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using Bureau.Infra;
+using Microsoft.Extensions.Options;
 
 namespace Bureau.Modules;
 
-/// <summary>Dispositivos da rede: tabela ARP do kernel + nomes do Pi-hole + DNS reverso.</summary>
-public sealed class NetworkModule(EventHub hub, PiHoleModule pihole)
+/// <summary>
+/// Dispositivos da rede: tabela ARP do kernel + nomes do Pi-hole + DNS reverso,
+/// fabricante pelo MAC (base do IEEE) e apelidos definidos pelo usuário (DataDir/aliases.json).
+/// </summary>
+public sealed class NetworkModule
 {
+    readonly EventHub _hub;
+    readonly PiHoleModule _pihole;
+    readonly string _aliasPath;
     readonly ConcurrentDictionary<string, (string? Name, DateTime At)> _dns = new();
+    readonly ConcurrentDictionary<string, string> _aliases;
+    DeviceInfo[] _last = [];
+
+    public NetworkModule(EventHub hub, PiHoleModule pihole, IOptions<BureauOptions> o)
+    {
+        _hub = hub;
+        _pihole = pihole;
+        _aliasPath = Path.Combine(o.Value.DataDir, "aliases.json");
+        _aliases = new(JsonFile.Load(_aliasPath, AppJson.Default.DictionaryStringString) ?? [], StringComparer.OrdinalIgnoreCase);
+    }
+
+    public bool SetAlias(string mac, string? name)
+    {
+        mac = (mac ?? "").Trim().ToLowerInvariant();
+        if (mac.Length != 17 || mac.Count(c => c == ':') != 5) return false;
+        name = new string((name ?? "").Where(c => !char.IsControl(c)).ToArray()).Trim();
+        if (name.Length == 0) _aliases.TryRemove(mac, out _);
+        else _aliases[mac] = name[..Math.Min(name.Length, 40)];
+        JsonFile.Save(_aliasPath, new Dictionary<string, string>(_aliases), AppJson.Default.DictionaryStringString);
+        Publish(_last);
+        return true;
+    }
+
+    void Publish(DeviceInfo[] raw)
+    {
+        _last = raw;
+        _hub.Publish("network", [.. raw.Select(Decorate)], AppJson.Default.DeviceInfoArray);
+    }
+
+    DeviceInfo Decorate(DeviceInfo d) => d with
+    {
+        Alias = _aliases.GetValueOrDefault(d.Mac.ToLowerInvariant()),
+        Vendor = d.Vendor ?? MacVendors.Lookup(d.Mac),
+        RandomMac = MacVendors.IsRandom(d.Mac),
+        Name = d.Name == "_gateway" ? "Roteador" : d.Name, // nome sintético do systemd-resolved
+    };
 
     public async Task RefreshAsync(CancellationToken ct = default)
     {
         if (!OperatingSystem.IsLinux())
         {
-            hub.Publish("network", DevFakes.Devices(), AppJson.Default.DeviceInfoArray);
+            Publish(DevFakes.Devices());
             return;
         }
 
@@ -28,7 +71,7 @@ public sealed class NetworkModule(EventHub hub, PiHoleModule pihole)
         }
 
         var cutoff = DateTimeOffset.UtcNow.AddDays(-7).ToUnixTimeSeconds();
-        foreach (var d in await pihole.GetDevicesAsync(ct))
+        foreach (var d in await _pihole.GetDevicesAsync(ct))
         {
             if (d.Mac.StartsWith("ip-") || d.Mac.Length != 17) continue;
             if (byMac.TryGetValue(d.Mac, out var cur))
@@ -40,7 +83,7 @@ public sealed class NetworkModule(EventHub hub, PiHoleModule pihole)
         var devices = await Task.WhenAll(byMac.Values.Select(async d =>
             d.Name is null ? d with { Name = await ResolveAsync(d.Ip) } : d));
 
-        hub.Publish("network", [.. devices.OrderByDescending(d => d.Online).ThenBy(d => IpKey(d.Ip))], AppJson.Default.DeviceInfoArray);
+        Publish([.. devices.OrderByDescending(d => d.Online).ThenBy(d => IpKey(d.Ip))]);
     }
 
     async Task<string?> ResolveAsync(string ip)

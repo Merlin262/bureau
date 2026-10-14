@@ -19,7 +19,7 @@ export interface PiHoleState {
   total: number; blocked: number; percent: number; gravity: number; clients: number
   topBlocked: { name: string; count: number }[]; history: { t: number; total: number; blocked: number }[]
 }
-export interface DeviceInfo { ip: string; mac: string; name?: string; vendor?: string; online: boolean; iface?: string }
+export interface DeviceInfo { ip: string; mac: string; name?: string; vendor?: string; online: boolean; iface?: string; alias?: string; randomMac: boolean }
 export interface OkResponse { ok: boolean; message?: string }
 export interface Me { authenticated: boolean; hostname?: string; version: string; allowPower: boolean }
 export interface AlertEvent { ts: number; kind: string; level: 'crit' | 'warn' | 'ok'; title: string; body: string; view: string }

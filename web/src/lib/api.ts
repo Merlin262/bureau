@@ -51,6 +51,7 @@ export const api = {
 
   blocking: (enabled: boolean, timer?: number) => req<OkResponse>('POST', '/api/pihole/blocking', { enabled, timer }),
   wol: (mac: string) => req<OkResponse>('POST', '/api/network/wol', { mac }),
+  alias: (mac: string, name: string) => req<OkResponse>('PUT', '/api/network/alias', { mac, name }),
   power: (action: 'reboot' | 'poweroff') => req<OkResponse>('POST', `/api/power/${action}`),
 
   pushConfig: () => req<PushConfig>('GET', '/api/push/config'),

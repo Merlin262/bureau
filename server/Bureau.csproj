@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <Content Update="bureau.dev.json" CopyToPublishDirectory="Never" />
+    <EmbeddedResource Include="Data/oui.tsv.gz" LogicalName="oui.tsv.gz" />
   </ItemGroup>
 
 </Project>

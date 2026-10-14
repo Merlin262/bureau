@@ -81,11 +81,11 @@ public static class DevFakes
 
     public static DeviceInfo[] Devices() =>
     [
-        new("192.168.0.1", "a4:2b:b0:11:22:33", "roteador", "TP-Link", true, "enp2s0"),
-        new("192.168.0.10", "d8:bb:c1:44:55:66", "desktop-joao", "Micro-Star", true, "enp2s0"),
-        new("192.168.0.23", "6c:4a:85:77:88:99", "pixel-8", "Google", true, "enp2s0"),
-        new("192.168.0.31", "b8:27:eb:aa:bb:cc", "tv-sala", "Samsung", true, "enp2s0"),
-        new("192.168.0.42", "00:1a:2b:3c:4d:5e", "nas-velho", "Synology", false, "enp2s0"),
+        new("192.168.0.1", "a0:f4:79:11:22:33", "_gateway", null, true, "enp2s0"),
+        new("192.168.0.10", "d8:bb:c1:44:55:66", "desktop-sala", null, true, "enp2s0"),
+        new("192.168.0.23", "26:e5:db:77:88:99", null, null, true, "enp2s0"),
+        new("192.168.0.31", "50:13:95:aa:bb:cc", null, null, true, "enp2s0"),
+        new("192.168.0.42", "b8:27:eb:3c:4d:5e", "raspberrypi", null, false, "enp2s0"),
     ];
 }
 

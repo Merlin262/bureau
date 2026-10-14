@@ -34,13 +34,15 @@ public sealed record PiHoleState(
     TopItem[] TopBlocked, HistPoint[] History);
 
 public sealed record PiDevice(string Mac, string? Ip, string? Name, string? Vendor, long LastQuery);
-public sealed record DeviceInfo(string Ip, string Mac, string? Name, string? Vendor, bool Online, string? Iface);
+public sealed record DeviceInfo(string Ip, string Mac, string? Name, string? Vendor, bool Online, string? Iface,
+    string? Alias = null, bool RandomMac = false);
 
 // ── API ──────────────────────────────────────────────────
 public sealed record LoginRequest(string? Password);
 public sealed record WatchRequest(string[] Units);
 public sealed record BlockingRequest(bool Enabled, int? Timer);
 public sealed record WolRequest(string Mac);
+public sealed record AliasRequest(string Mac, string? Name);
 public sealed record OkResponse(bool Ok, string? Message);
 public sealed record LogsResponse(string Text);
 public sealed record MeResponse(bool Authenticated, string? Hostname, string Version, bool AllowPower);
@@ -70,6 +72,8 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(WatchRequest))]
 [JsonSerializable(typeof(BlockingRequest))]
 [JsonSerializable(typeof(WolRequest))]
+[JsonSerializable(typeof(AliasRequest))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(OkResponse))]
 [JsonSerializable(typeof(LogsResponse))]
 [JsonSerializable(typeof(MeResponse))]
