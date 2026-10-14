@@ -67,11 +67,15 @@ trap 'rm -rf "$TMP"' EXIT
 
 if [[ -n "$LOCAL_DIR" ]]; then
   SRC="$LOCAL_DIR"
+  VERSION="local"
   say "Usando build local: $SRC"
 else
-  say "Baixando a última versão ($RID) de github.com/$REPO"
-  curl -fsSL "https://github.com/$REPO/releases/latest/download/bureau-$RID.tar.gz" -o "$TMP/bureau.tgz" \
-    || die "Falha no download. Confira o repositório (--repo usuario/bureau) ou use --local."
+  VERSION=$(curl -fsSL -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/latest" \
+    | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)
+  [[ -n "$VERSION" ]] || die "Nenhuma release encontrada em github.com/$REPO (--repo usuario/bureau ou --local)."
+  say "Baixando $VERSION ($RID) de github.com/$REPO"
+  curl -fsSL "https://github.com/$REPO/releases/download/$VERSION/bureau-$RID.tar.gz" -o "$TMP/bureau.tgz" \
+    || die "Falha no download de $VERSION."
   mkdir -p "$TMP/b" && tar -xzf "$TMP/bureau.tgz" -C "$TMP/b"
   SRC="$TMP/b"
 fi
@@ -86,7 +90,13 @@ install -d -m 755 "$PREFIX"
 rm -rf "$PREFIX/wwwroot"
 cp -a "$SRC/." "$PREFIX/"
 chmod 755 "$PREFIX/bureau"
-ok "Binário instalado em $PREFIX"
+echo "$VERSION" >"$PREFIX/VERSION"
+# Atualizador automático (vem no pacote; em pacotes antigos, baixa do repositório)
+if [[ ! -f "$PREFIX/update.sh" ]]; then
+  curl -fsSL "https://raw.githubusercontent.com/$REPO/main/deploy/bureau-update.sh" -o "$PREFIX/update.sh" || true
+fi
+[[ -f "$PREFIX/update.sh" ]] && chmod 755 "$PREFIX/update.sh"
+ok "Binário $VERSION instalado em $PREFIX"
 
 # ── 2. Usuário de serviço ─────────────────────────────────────
 if ! id "$SVC_USER" &>/dev/null; then
@@ -221,6 +231,41 @@ systemctl enable --now bureau >/dev/null 2>&1
 sleep 1
 systemctl is-active --quiet bureau || die "O serviço não iniciou. Veja: journalctl -u bureau -n 50"
 ok "Serviço bureau ativo"
+
+# ── 5b. Atualização automática ────────────────────────────────
+if [[ -f "$PREFIX/update.sh" ]]; then
+  cat >/etc/systemd/system/bureau-update.service <<UNIT
+[Unit]
+Description=BUREAU - atualização automática (releases do GitHub)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=BUREAU_REPO=$REPO
+ExecStart=$PREFIX/update.sh
+UNIT
+  cat >/etc/systemd/system/bureau-update.timer <<'UNIT'
+[Unit]
+Description=BUREAU - verifica novas versões
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=30min
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  if systemctl is-enabled --quiet bureau-update.timer 2>/dev/null; then
+    ok "Atualização automática ativa"
+  elif confirm "Atualizar o BUREAU automaticamente a cada nova release? [S/n]" s; then
+    systemctl enable --now bureau-update.timer >/dev/null 2>&1
+    ok "Atualização automática ativa (a cada ~30 min)"
+  fi
+fi
 
 # ── 6. Acesso externo (Tailscale) ─────────────────────────────
 if [[ $UPGRADE -eq 0 ]]; then

@@ -45,6 +45,7 @@ jobs:
       - name: Pacote
         run: |
           rm -f out/*.dbg out/*.pdb
+          cp deploy/bureau-update.sh out/update.sh && chmod 755 out/update.sh out/bureau
           tar -czf bureau-${{ matrix.rid }}.tar.gz -C out .
 
       - uses: softprops/action-gh-release@v2

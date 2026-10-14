@@ -9,6 +9,7 @@ RID="${1:-$( [[ "$(uname -m)" == "aarch64" ]] && echo linux-arm64 || echo linux-
 (cd web && npm ci && npm run build)
 dotnet publish server/Bureau.csproj -c Release -r "$RID" -o "dist/$RID"
 rm -f "dist/$RID"/*.dbg "dist/$RID"/*.pdb
+cp deploy/bureau-update.sh "dist/$RID/update.sh"
 
 echo
 echo "■ Pronto: dist/$RID  ($(du -sh "dist/$RID" | cut -f1))"

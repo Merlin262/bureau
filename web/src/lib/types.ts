@@ -25,3 +25,4 @@ export interface Me { authenticated: boolean; hostname?: string; version: string
 export interface AlertEvent { ts: number; kind: string; level: 'crit' | 'warn' | 'ok'; title: string; body: string; view: string }
 export interface DeviceSummary { id: string; name: string; kind: 'app' | 'fcm' | 'webpush'; created: number; current: boolean }
 export interface PushConfig { webPushKey: string; fcm: boolean; ntfy: boolean; deviceId?: string }
+export interface UpdateStatus { current: string; latest?: string; status: 'atualizado' | 'atualizando' | 'erro' | 'nunca'; message?: string; checkedAt: number; auto: boolean; supported: boolean }

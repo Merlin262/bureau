@@ -73,6 +73,7 @@ builder.Services.AddSingleton<WebPushSender>();
 builder.Services.AddSingleton<FcmSender>();
 builder.Services.AddSingleton<Notifier>();
 builder.Services.AddSingleton<AlertEngine>();
+builder.Services.AddSingleton<UpdateModule>();
 builder.Services.AddHostedService<SystemMonitor>();
 builder.Services.AddHostedService<Collectors>();
 

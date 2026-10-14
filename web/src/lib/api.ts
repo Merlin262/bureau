@@ -1,4 +1,4 @@
-import type { AlertEvent, DeviceSummary, Me, OkResponse, PushConfig, UnitEntry } from './types'
+import type { AlertEvent, DeviceSummary, Me, OkResponse, PushConfig, UnitEntry, UpdateStatus } from './types'
 import { store } from './store.svelte'
 import { conn } from './platform'
 
@@ -53,6 +53,8 @@ export const api = {
   wol: (mac: string) => req<OkResponse>('POST', '/api/network/wol', { mac }),
   alias: (mac: string, name: string) => req<OkResponse>('PUT', '/api/network/alias', { mac, name }),
   power: (action: 'reboot' | 'poweroff') => req<OkResponse>('POST', `/api/power/${action}`),
+  updateStatus: () => req<UpdateStatus>('GET', '/api/update'),
+  updateRun: () => req<OkResponse>('POST', '/api/update/run'),
 
   pushConfig: () => req<PushConfig>('GET', '/api/push/config'),
   pushDevices: () => req<DeviceSummary[]>('GET', '/api/push/devices'),

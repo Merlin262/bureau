@@ -1,7 +1,7 @@
 import type { AlertEvent, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot } from './types'
 import { sfx } from './sfx'
 import { openStream } from './sse'
-import { conn, tap } from './platform'
+import { conn, isNative, tap } from './platform'
 
 export interface Toast { id: number; kind: 'ok' | 'err' | 'info'; text: string }
 
@@ -47,7 +47,15 @@ const handlers: Record<string, (v: never) => void> = {
     }
   },
   history: (h: History) => (store.hist = h),
-  host: (h: HostInfo) => (store.host = h),
+  host: (h: HostInfo) => {
+    // Servidor atualizado enquanto a página estava aberta → recarrega a interface nova (no app ela é embutida).
+    const before = store.host?.version
+    store.host = h
+    if (before && before !== h.version) {
+      toast(`Servidor atualizado para v${h.version}`, 'ok')
+      if (!isNative) setTimeout(() => location.reload(), 1500)
+    }
+  },
   // Sem duplicatas (a lista usa o nome como chave; repetido derrubaria a tela).
   services: (v: ServiceInfo[]) => (store.services = v.filter((s, i) => v.findIndex((x) => x.unit === s.unit) === i)),
   containers: (v: ContainersState) => (store.containers = v),

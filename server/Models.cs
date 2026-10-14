@@ -43,6 +43,7 @@ public sealed record WatchRequest(string[] Units);
 public sealed record BlockingRequest(bool Enabled, int? Timer);
 public sealed record WolRequest(string Mac);
 public sealed record AliasRequest(string Mac, string? Name);
+public sealed record UpdateStatus(string Current, string? Latest, string Status, string? Message, long CheckedAt, bool Auto, bool Supported);
 public sealed record OkResponse(bool Ok, string? Message);
 public sealed record LogsResponse(string Text);
 public sealed record MeResponse(bool Authenticated, string? Hostname, string Version, bool AllowPower);
@@ -73,6 +74,7 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(BlockingRequest))]
 [JsonSerializable(typeof(WolRequest))]
 [JsonSerializable(typeof(AliasRequest))]
+[JsonSerializable(typeof(UpdateStatus))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(OkResponse))]
 [JsonSerializable(typeof(LogsResponse))]

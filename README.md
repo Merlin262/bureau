@@ -50,6 +50,18 @@ Para **atualizar**, rode o mesmo comando — a configuração é preservada. Par
 
 > Fez um fork? Instale do seu repositório com `sudo bash install.sh --repo seu-usuario/bureau` (ou troque `Merlin262` no README e no `install.sh`). Cada tag `v*` faz o GitHub Actions compilar e publicar os binários e o APK.
 
+### Atualizações automáticas
+
+Cada **release** publicada no GitHub chega sozinha ao servidor:
+
+1. Publique uma versão: `git tag v0.2.0 && git push origin v0.2.0`.
+2. O GitHub Actions compila o servidor (x64/ARM64) e o APK e cria a release (~5 min).
+3. O servidor verifica a cada ~30 min (`bureau-update.timer`), baixa, reinicia e confere se subiu. Se a versão nova não responder, **a anterior é restaurada** e ela não é tentada de novo até a próxima release.
+
+Em *Sistema → Atualizações* você vê a versão instalada, a última do GitHub e o botão **Verificar agora**. Navegadores abertos recarregam sozinhos após a atualização. Commits no `main` sem tag **não** vão para produção.
+
+Desligar: `sudo systemctl disable --now bureau-update.timer` · Forçar: `sudo /opt/bureau/update.sh --force`.
+
 ### Acesso pelo celular e de fora de casa
 
 A forma recomendada é o **[Tailscale](https://tailscale.com)** (grátis para uso pessoal):

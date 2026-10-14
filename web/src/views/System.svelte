@@ -9,7 +9,8 @@
   import { bytes, duration, pct } from '../lib/format'
   import { clearToken, isNative, platform } from '../lib/platform'
   import { disablePush, enablePush, nativePushAvailable, pushAvailable, pushRegisteredId } from '../lib/push'
-  import type { DeviceSummary, PushConfig } from '../lib/types'
+  import type { DeviceSummary, PushConfig, UpdateStatus } from '../lib/types'
+  import { onDestroy } from 'svelte'
 
   const h = $derived(store.host)
   const s = $derived(store.sys)
@@ -66,6 +67,31 @@
     await act(`dev:${d.id}`, '', () => (d.kind === 'app' ? api.revoke(d.id) : api.pushRemove(d.id)), 'Aparelho removido')
     if (d.id === pushRegisteredId()) { pushOn = false; try { localStorage.removeItem('bureau.pushId') } catch { /* ok */ } }
     loadDevices()
+  }
+
+  // ── Atualizações ──
+  let upd = $state<UpdateStatus | null>(null)
+  let poll: ReturnType<typeof setInterval> | undefined
+  const loadUpdate = async () => { try { upd = await api.updateStatus() } catch { /* servidor reiniciando */ } }
+  loadUpdate()
+  onDestroy(() => clearInterval(poll))
+
+  async function checkUpdate() {
+    const before = upd?.checkedAt ?? 0
+    await act('upd', '', api.updateRun)
+    clearInterval(poll)
+    let n = 0
+    // Acompanha até o script terminar (o servidor pode reiniciar no meio).
+    poll = setInterval(async () => {
+      await loadUpdate()
+      if ((upd && upd.checkedAt > before && upd.status !== 'atualizando') || ++n > 60) clearInterval(poll)
+    }, 2000)
+  }
+
+  const ago = (unix: number) => {
+    if (!unix) return 'nunca'
+    const m = Math.round((Date.now() / 1000 - unix) / 60)
+    return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : `há ${Math.round(m / 60)} h`
   }
 
   const KIND: Record<string, string> = { app: 'SESSÃO DO APP', fcm: 'PUSH · ANDROID', webpush: 'PUSH · NAVEGADOR' }
@@ -160,6 +186,24 @@
       <span><kbd>Q</kbd> <kbd>E</kbd> ANTERIOR / PRÓXIMA</span>
       <span><kbd>ESC</kbd> FECHAR</span>
     </div>
+  </Panel>
+
+  <Panel label="ATUALIZAÇÕES">
+    {#if upd}
+      <dl>
+        <dt>INSTALADA</dt><dd class="mono">{upd.current}</dd>
+        <dt>NO GITHUB</dt><dd class="mono">{upd.latest ?? '—'}</dd>
+        <dt>ESTADO</dt>
+        <dd class:red={upd.status === 'erro'} class:blink={upd.status === 'atualizando'}>{upd.message}</dd>
+        <dt>VERIFICADO</dt><dd class="mono dim">{ago(upd.checkedAt)}</dd>
+      </dl>
+      <div class="pref">
+        <div class="dim small">{upd.auto ? 'Automática: verifica novas releases a cada ~30 min.' : upd.supported ? 'Automática desligada.' : 'Atualizador não instalado — rode o install.sh novamente.'}</div>
+        <button class="btn" class:busy={!!store.pending.upd || upd.status === 'atualizando'} disabled={!upd.supported} onclick={checkUpdate}>Verificar agora</button>
+      </div>
+    {:else}
+      <p class="empty">Consultando…</p>
+    {/if}
   </Panel>
 
   <Panel label="ENERGIA" alert>
