@@ -18,7 +18,7 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
-    throw new Error('Servidor inacessível')
+    throw new Error(conn.base ? `Servidor inacessível: ${conn.base}` : 'Servidor inacessível')
   }
   if (r.status === 401 && !url.endsWith('/login') && !url.endsWith('/token')) {
     store.authed = false

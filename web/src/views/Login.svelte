@@ -62,7 +62,7 @@
         <input type="text" name="username" value="admin" autocomplete="username" hidden readonly />
         {#if isNative}
           <label class="mono dim" for="srv">SERVIDOR</label>
-          <input id="srv" class="field srv" type="url" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false"
+          <input id="srv" class="field srv" type="text" inputmode="url" autocomplete="url" autocapitalize="off" spellcheck="false"
             placeholder="192.168.0.5  ou  servidor.tailnet.ts.net" bind:value={server} disabled={busy} />
         {/if}
         <label class="mono dim" for="pw">CHAVE DE ACESSO</label>
