@@ -277,8 +277,9 @@ UNIT
 Description=BUREAU - verifica novas versões
 
 [Timer]
-OnBootSec=10min
-OnUnitActiveSec=30min
+# Horário fixo (a cada 30 min): não depende de execução anterior para começar a contar.
+OnBootSec=5min
+OnCalendar=*:0/30
 RandomizedDelaySec=5min
 Persistent=true
 

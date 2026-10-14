@@ -27,6 +27,28 @@ case "$(uname -m)" in
   *) echo "Arquitetura não suportada"; exit 1 ;;
 esac
 
+# Instalações antigas criaram um timer que podia nunca disparar (só OnUnitActiveSec): corrige uma vez.
+TIMER=/etc/systemd/system/bureau-update.timer
+if [[ -f "$TIMER" ]] && ! grep -q '^OnCalendar=' "$TIMER"; then
+  cat >"$TIMER" <<'UNIT'
+[Unit]
+Description=BUREAU - verifica novas versões
+
+[Timer]
+# Horário fixo (a cada 30 min): não depende de execução anterior para começar a contar.
+OnBootSec=5min
+OnCalendar=*:0/30
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl restart bureau-update.timer 2>/dev/null || true
+  echo "Timer de atualização corrigido."
+fi
+
 PORT=$(grep -m1 -E '"Port"' "$CONF" 2>/dev/null | grep -oE '[0-9]+' || true)
 PORT=${PORT:-8420}
 
