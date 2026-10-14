@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Bureau</string>
+    <string name="title_activity_main">Bureau</string>
+    <string name="package_name">dev.bureau.app</string>
+    <string name="custom_url_scheme">dev.bureau.app</string>
+</resources>

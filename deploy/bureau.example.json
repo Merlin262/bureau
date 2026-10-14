@@ -1,0 +1,17 @@
+{
+  "Port": 8420,
+  "PasswordHash": "gerado por: bureau set-password",
+  "DataDir": "/var/lib/bureau",
+  "AllowPower": true,
+  "Services": ["pihole-FTL", "docker", "ssh", "tailscaled"],
+  "Docker": { "Enabled": true, "Socket": "/var/run/docker.sock" },
+  "PiHole": { "Enabled": true, "Url": "http://127.0.0.1", "Password": "sua-app-password-do-pihole" },
+  "Alerts": { "Enabled": true, "DiskPercent": 90, "TempCelsius": 85, "BatteryCritical": 20 },
+  "Push": {
+    "FcmServiceAccount": "/etc/bureau/firebase.json",
+    "WebPushSubject": "mailto:voce@exemplo.com",
+    "NtfyUrl": "",
+    "NtfyToken": ""
+  },
+  "Logging": { "LogLevel": { "Default": "Warning", "bureau": "Information", "Microsoft.Hosting.Lifetime": "Information" } }
+}

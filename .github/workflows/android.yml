@@ -1,0 +1,90 @@
+name: android
+
+# Gera o APK do app. Roda em toda tag v* (anexa à release) ou manualmente (Actions → android → Run workflow).
+#
+# Segredos opcionais do repositório (Settings → Secrets and variables → Actions):
+#   GOOGLE_SERVICES_JSON  base64 do google-services.json do Firebase → habilita o push nativo
+#   KEYSTORE_BASE64       base64 da keystore (.jks)                  → APK de release assinado
+#   KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD
+# Sem a keystore, o CI gera um APK de debug (instalável, mas não atualiza um APK de release).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Firebase (opcional)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 -d > web/android/app/google-services.json
+            echo "VITE_FCM=1" >> "$GITHUB_ENV"
+            echo "Push nativo habilitado."
+          else
+            echo "::warning::GOOGLE_SERVICES_JSON não definido — APK sem push nativo (use ntfy ou o PWA)."
+          fi
+
+      - name: Assinatura (opcional)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > web/android/release.jks
+            printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+              "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > web/android/keystore.properties
+            echo "GRADLE_TASK=assembleRelease" >> "$GITHUB_ENV"
+          else
+            echo "GRADLE_TASK=assembleDebug" >> "$GITHUB_ENV"
+          fi
+
+      - name: Interface do app
+        working-directory: web
+        run: npm ci && npm run build:app && npx cap sync android
+
+      - name: Versão
+        run: |
+          if [[ "$GITHUB_REF_NAME" == v* ]]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.0-dev"; fi
+          echo "BUREAU_VERSION_NAME=$V" >> "$GITHUB_ENV"
+          echo "BUREAU_VERSION_CODE=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+
+      - name: APK
+        working-directory: web/android
+        run: |
+          chmod +x gradlew
+          ./gradlew "$GRADLE_TASK" --no-daemon
+          cp "$(find app/build/outputs/apk -name '*.apk' | head -1)" ../../bureau-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bureau-android
+          path: bureau-android.apk
+
+      - uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/v')
+        with:
+          files: bureau-android.apk

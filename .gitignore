@@ -1,0 +1,13 @@
+bin/
+obj/
+dist/
+node_modules/
+server/wwwroot/
+server/.data/
+*.user
+.vs/
+.idea/
+.vscode/
+.DS_Store
+dist-app/
+.claude/

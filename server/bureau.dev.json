@@ -1,0 +1,6 @@
+{
+  "Port": 8420,
+  "DataDir": ".data",
+  "Services": ["pihole-FTL", "docker", "ssh", "tailscaled", "cups"],
+  "Logging": { "LogLevel": { "Default": "Information", "Microsoft.AspNetCore": "Warning" } }
+}

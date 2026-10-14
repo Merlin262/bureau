@@ -1,0 +1,53 @@
+name: release
+
+# Crie uma tag (ex.: git tag v0.1.0 && git push --tags) para publicar binários prontos.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          # Ubuntu 22.04 (glibc 2.35) → o binário roda em Debian 12+, Ubuntu 22.04+ e derivados.
+          - rid: linux-x64
+            os: ubuntu-22.04
+          - rid: linux-arm64
+            os: ubuntu-22.04-arm
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Dependências do Native AOT
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Interface
+        working-directory: web
+        run: npm ci && npm run build
+
+      - name: Backend (Native AOT)
+        run: dotnet publish server/Bureau.csproj -c Release -r ${{ matrix.rid }} -p:Version=${GITHUB_REF_NAME#v} -o out
+
+      - name: Pacote
+        run: |
+          rm -f out/*.dbg out/*.pdb
+          tar -czf bureau-${{ matrix.rid }}.tar.gz -C out .
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: bureau-${{ matrix.rid }}.tar.gz
+          generate_release_notes: true
