@@ -16,18 +16,21 @@ public sealed partial class PiHoleModule
     public bool Available => O.Enabled || Fake;
 
     // ── Consultas ao vivo ────────────────────────────────
-    public async Task<DnsQuery[]> QueriesAsync(int length = 150)
+    /// <summary>Últimas consultas; com client, só as daquele aparelho (filtro do Pi-hole + conferência local).</summary>
+    public async Task<DnsQuery[]> QueriesAsync(int length = 150, string? client = null)
     {
-        if (Fake) return DevFakes.Queries();
+        if (Fake) return [.. DevFakes.Queries().Where(q => client is null || q.Client == client)];
         if (!O.Enabled) return [];
-        using var doc = await GetJsonAsync($"/api/queries?length={Math.Clamp(length, 10, 500)}", CancellationToken.None);
+        var clientFilter = client;
+        var filter = client is null ? "" : $"&client_ip={Uri.EscapeDataString(client)}";
+        using var doc = await GetJsonAsync($"/api/queries?length={Math.Clamp(length, 10, 1000)}{filter}", CancellationToken.None);
         return [.. doc.RootElement.GetProperty("queries").EnumerateArray().Select(q =>
         {
             var client = q.TryGetProperty("client", out var c) ? c : default;
             var status = Str(q, "status") ?? "?";
             return new DnsQuery((long)q.GetProperty("time").GetDouble(), Str(q, "domain") ?? "", Str(q, "type") ?? "",
                 Str(client, "ip") ?? "", Str(client, "name"), status, IsBlocked(status));
-        })];
+        }).Where(q => clientFilter is null || q.Client == clientFilter)];
     }
 
     static bool IsBlocked(string status) =>

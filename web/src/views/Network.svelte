@@ -6,7 +6,8 @@
   import { store, act, toast } from '../lib/store.svelte'
   import { api } from '../lib/api'
   import { duration, int } from '../lib/format'
-  import type { BlockState, DeviceInfo, MonitorDef } from '../lib/types'
+  import type { BlockState, DeviceInfo, DnsQuery, MonitorDef } from '../lib/types'
+  import { onDestroy } from 'svelte'
 
   let query = $state('')
   let mac = $state('')
@@ -83,6 +84,42 @@
   }
   const blockText = (b: BlockState) =>
     b.active ? 'BLOQUEADO' : b.start ? `AGENDADO ${b.start}–${b.end}` : ''
+
+  // ── O que cada aparelho está acessando (consultas DNS do Pi-hole) ──
+  let watching = $state<DeviceInfo | null>(null)
+  let devQueries = $state.raw<DnsQuery[]>([])
+  let devTimer: ReturnType<typeof setInterval> | undefined
+  let onlyBlockedDev = $state(false)
+  async function loadDevQueries() {
+    if (!watching || document.hidden) return
+    try { devQueries = (await api.queries(watching.ip)).sort((a, b) => b.ts - a.ts) } catch { /* offline */ }
+  }
+  function openAccess(d: DeviceInfo) {
+    watching = d
+    devQueries = []
+    loadDevQueries()
+    clearInterval(devTimer)
+    devTimer = setInterval(loadDevQueries, 3000)
+  }
+  function closeAccess() {
+    watching = null
+    clearInterval(devTimer)
+  }
+  onDestroy(() => clearInterval(devTimer))
+  // Domínio "principal" (ex.: i.ytimg.com → ytimg.com) para agrupar o ranking.
+  // Domínios de país com 2º nível (com.br, gov.br, co.uk…) mantêm 3 partes: mercadolivre.com.br, não "com.br".
+  const base = (d: string) => {
+    const p = d.split('.')
+    const n = p.length >= 3 && p[p.length - 1].length === 2 && p[p.length - 2].length <= 3 ? 3 : 2
+    return p.slice(-n).join('.')
+  }
+  const topDomains = $derived.by(() => {
+    const m = new Map<string, number>()
+    for (const q of devQueries) m.set(base(q.domain), (m.get(base(q.domain)) ?? 0) + 1)
+    return [...m].sort((a, b) => b[1] - a[1]).slice(0, 12)
+  })
+  const devShown = $derived(devQueries.filter((q) => !onlyBlockedDev || q.blocked).slice(0, 150))
+  const hms = (t: number) => new Date(t * 1000).toLocaleTimeString('pt-BR', { hour12: false })
 
   // ── Monitores (uptime) ──
   let editingMon = $state(false)
@@ -162,6 +199,7 @@
           <button class="btn danger" class:busy={!!store.pending[`blk:${d.mac}`]} onclick={() => quickUnblock(d, b)}>Liberar</button>
         {/if}
         {#if piholeOn}
+          <button class="btn ghost" onclick={() => openAccess(d)}>Acessos</button>
           <button class="btn ghost" onclick={() => openBlock(d)}>{b ? 'Regras' : 'Bloquear'}</button>
         {/if}
         {#if !d.online && !d.randomMac}
@@ -210,6 +248,38 @@
         <button class="btn danger" onclick={() => { const d = blocking!; blocking = null; act(`blk:${d.mac}`, '', () => api.unblock(d.mac)) }}>Remover regras</button>
       {/if}
     </div>
+  </Modal>
+{/if}
+
+{#if watching}
+  <Modal title={`Acessos · ${label(watching)}`} onclose={closeAccess}>
+    <p class="dim small">Consultas DNS deste aparelho ({watching.ip}) registradas pelo Pi-hole, atualizadas a cada 3 s. Mostra os sites/serviços contatados — não o conteúdo das páginas.</p>
+    {#if devQueries.length === 0}
+      <p class="empty">Nenhuma consulta recente — o aparelho pode não estar usando o Pi-hole como DNS.</p>
+    {:else}
+      <div class="mono dim sect">MAIS ACESSADOS (ÚLTIMAS {devQueries.length} CONSULTAS)</div>
+      <div class="top">
+        {#each topDomains as [dom, n]}
+          <span class="chip mono">{dom} <b>{n}</b></span>
+        {/each}
+      </div>
+      <div class="sect-row">
+        <span class="mono dim">AO VIVO</span>
+        <button class="btn mini" class:on={onlyBlockedDev} onclick={() => (onlyBlockedDev = !onlyBlockedDev)}>Só bloqueadas</button>
+      </div>
+      <div class="qlist">
+        {#each devShown as q, i (q.ts + q.domain + i)}
+          <div class="q" class:blk={q.blocked}>
+            <span class="mono dim num">{hms(q.ts)}</span>
+            <span class="dom">{q.domain}</span>
+            <button class="btn mini" class:danger={!q.blocked} class:busy={!!store.pending[`dom:${q.domain}`]}
+              onclick={() => act(`dom:${q.domain}`, '', () => api.domain(q.domain, q.blocked ? 'allow' : 'deny'))}>
+              {q.blocked ? 'Liberar' : 'Bloquear'}
+            </button>
+          </div>
+        {/each}
+      </div>
+    {/if}
   </Modal>
 {/if}
 
@@ -273,6 +343,16 @@
   .modal-actions { margin-top: 14px; }
   .mon-edit { display: grid; grid-template-columns: 1fr 1.6fr auto; gap: 6px; margin-bottom: 6px; }
   code { font-family: var(--mono); font-size: 12px; }
+  .sect { margin: 6px 0 8px; font-size: 10px; }
+  .sect-row { display: flex; justify-content: space-between; align-items: center; margin: 14px 0 6px; font-size: 10px; }
+  .top { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 3px 7px; border: 1px solid var(--line-2); font-size: 11px; color: var(--fg-dim); }
+  .chip b { color: var(--fg); font-weight: 400; margin-left: 4px; }
+  .qlist { max-height: 340px; overflow: auto; }
+  .q { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .q .dom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q.blk .dom { color: var(--red); }
+  .btn.mini { height: 22px; padding: 0 7px; font-size: 9.5px; }
 
   @media (hover: none) { .pen { opacity: 1; } }
   @media (max-width: 900px) {

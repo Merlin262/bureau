@@ -214,7 +214,9 @@ public static class Api
         api.MapPost("/homeassistant/toggle", async (EntityRequest req, HomeAssistantModule h) => TypedResults.Ok(await h.ToggleAsync(req.EntityId)));
 
         // ── Pi-hole interativo / bloqueio de aparelhos ──────
-        api.MapGet("/pihole/queries", async (PiHoleModule p) => TypedResults.Ok(await p.QueriesAsync()));
+        api.MapGet("/pihole/queries", async (string? client, PiHoleModule p) =>
+            TypedResults.Ok(await p.QueriesAsync(client is null ? 150 : 500,
+                client is not null && System.Net.IPAddress.TryParse(client, out _) ? client : null)));
         api.MapPost("/pihole/domain", async (DomainRequest req, PiHoleModule p) => TypedResults.Ok(await p.SetDomainAsync(req.Domain, req.List)));
         api.MapPut("/network/block", (BlockRule rule, DeviceBlocks b) => TypedResults.Ok(b.Upsert(rule)));
         api.MapDelete("/network/block/{mac}", (string mac, DeviceBlocks b) => TypedResults.Ok(b.Remove(mac)));

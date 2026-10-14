@@ -63,7 +63,7 @@ export const api = {
   haToggle: (entityId: string) => req<OkResponse>('POST', '/api/homeassistant/toggle', { entityId }),
   monitors: () => req<MonitorDef[]>('GET', '/api/monitors'),
   saveMonitors: (defs: MonitorDef[]) => req<OkResponse>('PUT', '/api/monitors', defs),
-  queries: () => req<DnsQuery[]>('GET', '/api/pihole/queries'),
+  queries: (client?: string) => req<DnsQuery[]>('GET', `/api/pihole/queries${client ? `?client=${enc(client)}` : ''}`),
   domain: (domain: string, list: 'deny' | 'allow') => req<OkResponse>('POST', '/api/pihole/domain', { domain, list }),
   block: (rule: BlockRule) => req<OkResponse>('PUT', '/api/network/block', rule),
   unblock: (mac: string) => req<OkResponse>('DELETE', `/api/network/block/${enc(mac)}`),
