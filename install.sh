@@ -137,6 +137,13 @@ if [[ ! -f "$CONF" ]]; then
   PUSH_EMAIL=$(ask "E-mail para o Web Push [Enter para pular]:" "")
   [[ -n "$PUSH_EMAIL" ]] || PUSH_EMAIL="bureau@example.com"
 
+  TERM_ENABLED=false; TERM_USER="${SUDO_USER:-}"
+  echo "  ${D}Terminal no navegador/app: abre um SSH no seu usuário e pede a sua senha do Linux a cada sessão.${N}"
+  if [[ -n "$TERM_USER" && "$TERM_USER" != "root" ]] && confirm "Habilitar o terminal para o usuário '$TERM_USER'? [s/N]"; then
+    TERM_ENABLED=true
+    command -v sshd >/dev/null || command -v /usr/sbin/sshd >/dev/null || apt-get install -y -qq openssh-server >/dev/null 2>&1 || true
+  fi
+
   install -d -m 750 -o root -g "$SVC_USER" "$CONF_DIR"
   cat >"$CONF" <<EOF
 {
@@ -147,6 +154,7 @@ if [[ ! -f "$CONF" ]]; then
   "Docker": { "Enabled": true, "Socket": "/var/run/docker.sock" },
   "PiHole": { "Enabled": $PH_ENABLED, "Url": "$PH_URL", "Password": "$(json_escape "$PH_PASS")" },
   "Alerts": { "Enabled": true, "DiskPercent": 90, "TempCelsius": 85, "BatteryCritical": 20 },
+  "Terminal": { "Enabled": $TERM_ENABLED, "User": "$TERM_USER", "Port": 22 },
   "Push": {
     "WebPushSubject": "mailto:$(json_escape "$PUSH_EMAIL")",
     "FcmServiceAccount": "$CONF_DIR/firebase.json",

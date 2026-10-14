@@ -19,9 +19,9 @@ export interface PiHoleState {
   total: number; blocked: number; percent: number; gravity: number; clients: number
   topBlocked: { name: string; count: number }[]; history: { t: number; total: number; blocked: number }[]
 }
-export interface DeviceInfo { ip: string; mac: string; name?: string; vendor?: string; online: boolean; iface?: string; alias?: string; randomMac: boolean }
+export interface DeviceInfo { ip: string; mac: string; name?: string; vendor?: string; online: boolean; iface?: string; alias?: string; randomMac: boolean; firstSeen: number; dnsQueries: number }
 export interface OkResponse { ok: boolean; message?: string }
-export interface Me { authenticated: boolean; hostname?: string; version: string; allowPower: boolean }
+export interface Me { authenticated: boolean; hostname?: string; version: string; allowPower: boolean; terminal: boolean }
 export interface AlertEvent { ts: number; kind: string; level: 'crit' | 'warn' | 'ok'; title: string; body: string; view: string }
 export interface DeviceSummary { id: string; name: string; kind: 'app' | 'fcm' | 'apns' | 'webpush'; created: number; current: boolean }
 export interface PushConfig { webPushKey: string; fcm: boolean; ntfy: boolean; deviceId?: string; apns: boolean }
@@ -34,3 +34,9 @@ export interface HaState { configured: boolean; online: boolean; error?: string;
 export interface JfSession { user: string; title: string; client?: string; device?: string; paused: boolean; progress: number; transcoding: boolean }
 export interface JfState { configured: boolean; online: boolean; error?: string; name?: string; version?: string; library: NamedCount[]; sessions: JfSession[] }
 export interface MetricsSeries { range: string; step: number; t: number[]; cpu: (number | null)[]; mem: (number | null)[]; temp: (number | null)[]; rx: (number | null)[]; tx: (number | null)[]; battery: (number | null)[] }
+export interface MonitorDef { id: string; name: string; target: string }
+export interface MonitorState { id: string; name: string; target: string; up: boolean; latencyMs?: number; error?: string; uptime24h: number; since: number; recent: number[]; builtin: boolean }
+export interface DnsQuery { ts: number; domain: string; type: string; client: string; clientName?: string; status: string; blocked: boolean }
+export interface BlockRule { mac: string; label?: string; manual: boolean; days: number[]; start?: string | null; end?: string | null }
+export interface BlockState extends BlockRule { active: boolean; error?: string }
+export interface AccessEntry { ts: number; ip: string; country?: string; method: 'web' | 'app' | 'terminal'; ok: boolean; device: string }

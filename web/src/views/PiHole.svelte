@@ -5,6 +5,28 @@
   import { store, act } from '../lib/store.svelte'
   import { api } from '../lib/api'
   import { duration, int } from '../lib/format'
+  import { onDestroy } from 'svelte'
+  import type { DnsQuery } from '../lib/types'
+
+  // ── Consultas ao vivo (só enquanto esta tela está aberta) ──
+  let queries = $state.raw<DnsQuery[]>([])
+  let paused = $state(false)
+  let onlyBlocked = $state(false)
+  let qfilter = $state('')
+  async function loadQueries() {
+    if (paused || document.hidden) return
+    try { queries = (await api.queries()).sort((x, y) => y.ts - x.ts) } catch { /* offline */ }
+  }
+  loadQueries()
+  const qtimer = setInterval(loadQueries, 2000)
+  onDestroy(() => clearInterval(qtimer))
+  const shownQ = $derived(queries.filter((q) =>
+    (!onlyBlocked || q.blocked) &&
+    (!qfilter || q.domain.includes(qfilter.toLowerCase()) || (q.clientName ?? q.client).toLowerCase().includes(qfilter.toLowerCase()))))
+  const hms = (t: number) => new Date(t * 1000).toLocaleTimeString('pt-BR', { hour12: false })
+  const STATUS: Record<string, string> = { GRAVITY: 'LISTA', REGEX: 'REGEX', DENYLIST: 'NEGADO', FORWARDED: 'ENCAMINHADO', CACHE: 'CACHE', CACHE_STALE: 'CACHE' }
+  const domainAct = (q: DnsQuery) =>
+    act(`dom:${q.domain}`, '', () => api.domain(q.domain, q.blocked ? 'allow' : 'deny'))
 
   const p = $derived(store.pihole)
   const busy = $derived(!!store.pending['ph'])
@@ -94,6 +116,29 @@
       </ol>
     </Panel>
   </div>
+
+  <Panel label="CONSULTAS AO VIVO" class="live">
+    {#snippet aside()}
+      <button class="btn mini" class:on={onlyBlocked} onclick={() => (onlyBlocked = !onlyBlocked)}>Só bloqueadas</button>
+      <button class="btn mini" class:on={paused} onclick={() => (paused = !paused)}>{paused ? '▶ Retomar' : '❚❚ Pausar'}</button>
+    {/snippet}
+    <input class="field qf" placeholder="Filtrar por domínio ou aparelho…" bind:value={qfilter} />
+    <div class="qlist">
+      {#each shownQ as q, i (q.ts + q.domain + q.client + i)}
+        <div class="q" class:blk={q.blocked}>
+          <span class="mono dim num">{hms(q.ts)}</span>
+          <span class="mono cli">{q.clientName ?? q.client}</span>
+          <span class="dom">{q.domain}</span>
+          <span class="mono st">{q.blocked ? 'BLOQUEADO' : (STATUS[q.status] ?? q.status)}</span>
+          <button class="btn mini" class:danger={!q.blocked} class:busy={!!store.pending[`dom:${q.domain}`]} onclick={() => domainAct(q)}>
+            {q.blocked ? 'Liberar' : 'Bloquear'}
+          </button>
+        </div>
+      {:else}
+        <p class="empty">Nenhuma consulta.</p>
+      {/each}
+    </div>
+  </Panel>
 {:else}
   <p class="empty">Estabelecendo contato…</p>
 {/if}
@@ -125,7 +170,18 @@
   .cfg { margin: 10px 0; padding: 10px; background: #060607; font-family: var(--mono); font-size: 12px; overflow: auto; }
   code { font-family: var(--mono); font-size: 13px; }
 
+  :global(.live) { margin-top: 14px; }
+  .qf { margin-bottom: 8px; max-width: 420px; }
+  .qlist { max-height: 460px; overflow: auto; }
+  .q { display: grid; grid-template-columns: 70px 130px minmax(0, 1fr) 100px 76px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .q .cli { font-size: 11px; color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .q .st { font-size: 10px; color: var(--fg-mute); }
+  .q.blk .st, .q.blk .dom { color: var(--red); }
+  .q .btn.mini { height: 22px; padding: 0 6px; font-size: 9.5px; justify-content: center; }
+  .btn.mini { height: 24px; padding: 0 8px; font-size: 10px; }
   @media (max-width: 900px) {
     .lower { grid-template-columns: 1fr; }
+    .q { grid-template-columns: 62px minmax(0, 1fr) 70px; }
+    .q .cli, .q .st { display: none; }
   }
 </style>

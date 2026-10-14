@@ -206,6 +206,48 @@ public sealed class AlertEngine
         }
     }
 
+    // ── Monitores de disponibilidade ─────────────────────
+    public void OnMonitor(bool internet, string name, bool up, long downSeconds, string? error)
+    {
+        lock (_lock)
+        {
+            var dur = downSeconds < 120 ? $"{downSeconds} s" : downSeconds < 7200 ? $"{downSeconds / 60} min" : $"{downSeconds / 3600.0:0.#} h";
+            if (internet)
+            {
+                // Com a internet fora o push provavelmente não sai; o aviso de volta informa a duração.
+                if (!up) Raise("internet", "internet", "crit", "Internet caiu", "O servidor perdeu a conexão com a internet.", "rede");
+                else Raise("internet-ok", "internet", "ok", "Internet voltou", $"A conexão ficou fora por {dur}.", "rede");
+            }
+            else if (!up) Raise($"mon:{name}", "monitor", "crit", $"{name} fora do ar", error ?? "Sem resposta.", "rede");
+            else Raise($"mon-ok:{name}", "monitor", "ok", $"{name} voltou", $"Ficou fora por {dur}.", "rede");
+        }
+    }
+
+    // ── Rede ─────────────────────────────────────────────
+    public void OnNewDevice(DeviceInfo d)
+    {
+        lock (_lock)
+        {
+            var what = d.Vendor ?? (d.RandomMac ? "celular/tablet (MAC aleatório)" : "fabricante desconhecido");
+            Raise($"newdev:{d.Mac}", "network", "warn", "Aparelho novo na rede", $"{d.Name ?? what} · {d.Ip} · {d.Mac}", "rede");
+        }
+    }
+
+    // ── Acessos ao BUREAU ────────────────────────────────
+    public void OnLogin(AccessEntry e, bool knownIp, int recentFailures)
+    {
+        lock (_lock)
+        {
+            var where = e.Country is null ? e.Ip : $"{e.Ip} ({e.Country})";
+            if (e.Ok && !knownIp && !AccessLog.IsLocal(e.Ip))
+                Raise($"login-new:{e.Ip}", "access", "warn", "Novo acesso ao BUREAU",
+                    $"Login de um IP nunca visto: {where} · {e.Device}.", "sistema");
+            if (!e.Ok && recentFailures == 5)
+                Raise("login-fail", "access", "crit", "Tentativas de login falhas",
+                    $"5 senhas erradas em 10 min (última de {where}).", "sistema");
+        }
+    }
+
     // ── Integrações (Home Assistant, Jellyfin…) ──────────
     public void OnOnline(string key, string name, bool configured, bool online, string view)
     {

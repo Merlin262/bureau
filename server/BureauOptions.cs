@@ -22,8 +22,18 @@ public sealed class BureauOptions
     /// <summary>Jobs de backup (serviços systemd, normalmente acionados por um .timer) a acompanhar.</summary>
     public BackupJob[] Backups { get; set; } = [];
 
+    public TerminalOptions Terminal { get; set; } = new();
+
     /// <summary>Mostrar e aplicar atualizações de pacotes do sistema (apt).</summary>
     public bool SystemUpdates { get; set; } = true;
+}
+
+/// <summary>Terminal no navegador: SSH para este usuário em 127.0.0.1 (pede a senha do Linux).</summary>
+public sealed class TerminalOptions
+{
+    public bool Enabled { get; set; }
+    public string User { get; set; } = "";
+    public int Port { get; set; } = 22;
 }
 
 public sealed class HomeAssistantOptions

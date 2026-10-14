@@ -119,13 +119,28 @@ public static class DevFakes
             new("convidado", "Arrival", "Jellyfin Web", "Chrome", true, 81.2, true),
         ]);
 
+    public static DnsQuery[] Queries()
+    {
+        string[] domains = ["www.google.com", "graph.facebook.com", "api.spotify.com", "ads.youtube.com", "telemetry.microsoft.com",
+            "i.ytimg.com", "doubleclick.net", "github.com", "app-measurement.com", "connectivitycheck.gstatic.com", "netflix.com", "tracking.tiktok.com"];
+        (string Ip, string Name)[] clients = [("192.168.0.10", "desktop-sala"), ("192.168.0.23", "celular"), ("192.168.0.31", "tv-sala")];
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        return [.. Enumerable.Range(0, 60).Select(i =>
+        {
+            var d = domains[Random.Shared.Next(domains.Length)];
+            var c = clients[Random.Shared.Next(clients.Length)];
+            var blocked = d.Contains("ads") || d.Contains("telemetry") || d.Contains("doubleclick") || d.Contains("tracking") || d.Contains("measurement");
+            return new DnsQuery(now - i * Random.Shared.Next(1, 9), d, i % 5 == 0 ? "AAAA" : "A", c.Ip, c.Name, blocked ? "GRAVITY" : i % 3 == 0 ? "CACHE" : "FORWARDED", blocked);
+        })];
+    }
+
     public static DeviceInfo[] Devices() =>
     [
-        new("192.168.0.1", "a0:f4:79:11:22:33", "_gateway", null, true, "enp2s0"),
-        new("192.168.0.10", "d8:bb:c1:44:55:66", "desktop-sala", null, true, "enp2s0"),
-        new("192.168.0.23", "26:e5:db:77:88:99", null, null, true, "enp2s0"),
-        new("192.168.0.31", "50:13:95:aa:bb:cc", null, null, true, "enp2s0"),
-        new("192.168.0.42", "b8:27:eb:3c:4d:5e", "raspberrypi", null, false, "enp2s0"),
+        new("192.168.0.1", "a0:f4:79:11:22:33", "_gateway", null, true, "enp2s0", DnsQueries: 4210),
+        new("192.168.0.10", "d8:bb:c1:44:55:66", "desktop-sala", null, true, "enp2s0", DnsQueries: 1880),
+        new("192.168.0.23", "26:e5:db:77:88:99", null, null, true, "enp2s0", DnsQueries: 960),
+        new("192.168.0.31", "50:13:95:aa:bb:cc", null, null, true, "enp2s0", DnsQueries: 12750),
+        new("192.168.0.42", "b8:27:eb:3c:4d:5e", "raspberrypi", null, false, "enp2s0", DnsQueries: 0),
     ];
 }
 

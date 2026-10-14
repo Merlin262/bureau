@@ -18,5 +18,6 @@
   "Jellyfin": { "Enabled": true, "Url": "http://127.0.0.1:8096", "ApiKey": "chave-de-api" },
   "Backups": [ { "Name": "Fotos", "Unit": "restic-fotos.service", "MaxAgeHours": 26 } ],
   "SystemUpdates": true,
+  "Terminal": { "Enabled": false, "User": "seu-usuario-linux", "Port": 22 },
   "Logging": { "LogLevel": { "Default": "Warning", "bureau": "Information", "Microsoft.Hosting.Lifetime": "Information" } }
 }

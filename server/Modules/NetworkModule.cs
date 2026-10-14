@@ -14,16 +14,21 @@ public sealed class NetworkModule
 {
     readonly EventHub _hub;
     readonly PiHoleModule _pihole;
-    readonly string _aliasPath;
+    readonly AlertEngine _alerts;
+    readonly string _aliasPath, _knownPath;
+    readonly ConcurrentDictionary<string, long> _firstSeen;
     readonly ConcurrentDictionary<string, (string? Name, DateTime At)> _dns = new();
     readonly ConcurrentDictionary<string, string> _aliases;
     DeviceInfo[] _last = [];
 
-    public NetworkModule(EventHub hub, PiHoleModule pihole, IOptions<BureauOptions> o)
+    public NetworkModule(EventHub hub, PiHoleModule pihole, AlertEngine alerts, IOptions<BureauOptions> o)
     {
         _hub = hub;
         _pihole = pihole;
+        _alerts = alerts;
         _aliasPath = Path.Combine(o.Value.DataDir, "aliases.json");
+        _knownPath = Path.Combine(o.Value.DataDir, "known-devices.json");
+        _firstSeen = new(JsonFile.Load(_knownPath, AppJson.Default.DictionaryStringInt64) ?? [], StringComparer.OrdinalIgnoreCase);
         _aliases = new(JsonFile.Load(_aliasPath, AppJson.Default.DictionaryStringString) ?? [], StringComparer.OrdinalIgnoreCase);
     }
 
@@ -41,12 +46,29 @@ public sealed class NetworkModule
 
     void Publish(DeviceInfo[] raw)
     {
+        TrackNew(raw);
         _last = raw;
         _hub.Publish("network", [.. raw.Select(Decorate)], AppJson.Default.DeviceInfoArray);
     }
 
+    /// <summary>Aparelho nunca visto antes → alerta. Na primeira execução só aprende os que já existem.</summary>
+    void TrackNew(DeviceInfo[] raw)
+    {
+        var learning = _firstSeen.IsEmpty;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var added = false;
+        foreach (var d in raw.Where(d => d.Online))
+        {
+            if (!_firstSeen.TryAdd(d.Mac.ToLowerInvariant(), learning ? 0 : now)) continue;
+            added = true;
+            if (!learning) _alerts.OnNewDevice(Decorate(d));
+        }
+        if (added) JsonFile.Save(_knownPath, new Dictionary<string, long>(_firstSeen), AppJson.Default.DictionaryStringInt64);
+    }
+
     DeviceInfo Decorate(DeviceInfo d) => d with
     {
+        FirstSeen = _firstSeen.GetValueOrDefault(d.Mac.ToLowerInvariant()),
         Alias = _aliases.GetValueOrDefault(d.Mac.ToLowerInvariant()),
         Vendor = d.Vendor ?? MacVendors.Lookup(d.Mac),
         RandomMac = MacVendors.IsRandom(d.Mac),
@@ -80,8 +102,9 @@ public sealed class NetworkModule
                 byMac[d.Mac] = new DeviceInfo(d.Ip, d.Mac, d.Name, d.Vendor, false, null);
         }
 
+        var activity = await _pihole.ActivityAsync(ct);
         var devices = await Task.WhenAll(byMac.Values.Select(async d =>
-            d.Name is null ? d with { Name = await ResolveAsync(d.Ip) } : d));
+            (d.Name is null ? d with { Name = await ResolveAsync(d.Ip) } : d) with { DnsQueries = activity.GetValueOrDefault(d.Ip) }));
 
         Publish([.. devices.OrderByDescending(d => d.Online).ThenBy(d => IpKey(d.Ip))]);
     }
@@ -128,7 +151,7 @@ public sealed class NetworkModule
 /// </summary>
 public sealed class Collectors(EventHub hub, ServicesModule services, DockerModule docker,
     PiHoleModule pihole, NetworkModule network, AptModule apt, BackupsModule backups,
-    HomeAssistantModule ha, JellyfinModule jellyfin, ILogger<Collectors> log) : BackgroundService
+    HomeAssistantModule ha, JellyfinModule jellyfin, MonitorsModule monitors, DeviceBlocks blocks, ILogger<Collectors> log) : BackgroundService
 {
     protected override Task ExecuteAsync(CancellationToken ct) => Task.WhenAll(
         Loop("services", services.RefreshAsync, 4, 15, ct),
@@ -138,7 +161,9 @@ public sealed class Collectors(EventHub hub, ServicesModule services, DockerModu
         Loop("apt", apt.RefreshAsync, 10, 120, ct),          // lista do apt só a cada 6 h (interno)
         Loop("backups", backups.RefreshAsync, 15, 120, ct),
         Loop("homeassistant", ha.RefreshAsync, 5, 60, ct),
-        Loop("jellyfin", jellyfin.RefreshAsync, 5, 60, ct));
+        Loop("jellyfin", jellyfin.RefreshAsync, 5, 60, ct),
+        Loop("monitors", monitors.RunAsync, 60, 60, ct),
+        Loop("blocks", blocks.ApplyAsync, 30, 30, ct));
 
     async Task Loop(string name, Func<CancellationToken, Task> refresh, int activeSec, int idleSec, CancellationToken ct)
     {

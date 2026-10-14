@@ -12,6 +12,11 @@ O app do BUREAU é a **mesma interface** do painel web, empacotada com [Capacito
 4. Digite a senha. O app recebe um **token próprio** deste aparelho — revogável a qualquer momento em *Sistema → Aparelhos*.
 5. Em *Sistema → Notificações*, toque em **Ativar** e depois em **Testar**.
 
+### Biometria e terminal no celular
+
+- *Sistema → Preferências → Biometria*: exige digital/rosto (ou o PIN do aparelho) ao abrir o app e após 1 min em segundo plano.
+- *Sistema → Terminal*: shell do servidor no celular, com barra de teclas extras (ESC, TAB, CTRL, setas). Precisa estar habilitado no servidor (`Terminal` no `bureau.json`).
+
 ## Alertas enviados
 
 | Alerta | Quando |
@@ -27,6 +32,9 @@ O app do BUREAU é a **mesma interface** do painel web, empacotada com [Capacito
 | **Backup falhou / atrasado** | A última execução terminou com erro, ou não há sucesso há mais de `MaxAgeHours` |
 | **Atualizações de segurança** | Surgem pacotes com correções de segurança pendentes |
 | **Reinicialização necessária** | Uma atualização (ex.: kernel) pede reiniciar o servidor |
+| **Sites e serviços / internet** | Um monitor falha 2 vezes seguidas; ao voltar, informa quanto tempo ficou fora |
+| **Aparelho novo na rede** | Um MAC nunca visto aparece online |
+| **Novo acesso / senhas erradas** | Login de um IP nunca visto; 5 senhas erradas em 10 min |
 
 Ações feitas pela própria interface (ex.: você clicou em *Parar*) **não** geram alerta. O mesmo alerta não se repete por 5 minutos. Os últimos 50 ficam em *Painel → Registro de ocorrências*.
 

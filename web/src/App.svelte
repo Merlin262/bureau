@@ -9,6 +9,8 @@
   import System from './views/System.svelte'
   import Apps from './views/Apps.svelte'
   import Toasts from './components/Toasts.svelte'
+  import LockScreen from './components/LockScreen.svelte'
+  import { initBioLock } from './lib/biometric'
   import { store, connect, disconnect } from './lib/store.svelte'
   import { router, views, go, step, type ViewId } from './lib/router.svelte'
   import { api } from './lib/api'
@@ -43,6 +45,7 @@
   }
 
   onMount(() => {
+    initBioLock()
     boot()
     initNative()
     tickClock()
@@ -134,6 +137,8 @@
 {:else}
   <div class="booting mono"><span class="red">■</span> ESTABELECENDO CONTATO…</div>
 {/if}
+
+{#if store.locked}<LockScreen />{/if}
 
 <Toasts />
 

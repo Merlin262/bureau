@@ -1,4 +1,4 @@
-import type { AlertEvent, AptState, BackupInfo, HaState, JfState, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot } from './types'
+import type { AlertEvent, AptState, BackupInfo, BlockState, HaState, JfState, MonitorState, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot } from './types'
 import { sfx } from './sfx'
 import { openStream } from './sse'
 import { conn, isNative, tap } from './platform'
@@ -24,6 +24,10 @@ class Store {
   backups = $state.raw<BackupInfo[] | null>(null)
   homeassistant = $state.raw<HaState | null>(null)
   jellyfin = $state.raw<JfState | null>(null)
+  monitors = $state.raw<MonitorState[] | null>(null)
+  blocks = $state.raw<BlockState[]>([])
+  /** App travado aguardando biometria. */
+  locked = $state(false)
 
   /** Ações em andamento: chave → rótulo (UI otimista). */
   pending = $state<Record<string, string>>({})
@@ -69,6 +73,8 @@ const handlers: Record<string, (v: never) => void> = {
   backups: (v: BackupInfo[]) => (store.backups = v),
   homeassistant: (v: HaState) => (store.homeassistant = v),
   jellyfin: (v: JfState) => (store.jellyfin = v),
+  monitors: (v: MonitorState[]) => (store.monitors = v),
+  blocks: (v: BlockState[]) => (store.blocks = v),
   alerts: (v: AlertEvent[]) => {
     // Alerta novo enquanto a interface está aberta → aviso na tela também.
     const fresh = v.filter((a) => a.ts > lastAlertTs)

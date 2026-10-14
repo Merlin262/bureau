@@ -20,10 +20,10 @@
 | **Painel** | CPU (total e por núcleo), RAM/swap, tráfego, temperatura, uptime, **bateria do notebook como nobreak** (alerta de queda de energia), resumo de tudo com alertas e **histórico de até 90 dias** (CPU, memória, temperatura, rede) |
 | **Serviços** | Serviços systemd monitorados: estado, memória, tempo ativo; iniciar/parar/reiniciar; logs do journal ao vivo; escolha quais monitorar pela interface |
 | **Contêineres** | Docker: estado, portas, iniciar/parar/reiniciar, logs |
-| **Pi-hole** | Estatísticas (v6), pausar bloqueio (5 min / 30 min / 1 h / indefinido), gráfico de 24 h, domínios mais bloqueados |
-| **Rede** | Dispositivos da LAN (ARP + Pi-hole + DNS reverso), **fabricante pelo MAC**, **apelidos**, marcação de MAC aleatório, online/offline e **Wake-on-LAN** (liga PCs desligados) |
+| **Pi-hole** | Estatísticas (v6), pausar bloqueio, gráfico de 24 h, mais bloqueados e **consultas DNS ao vivo** (filtro por aparelho/domínio, bloquear ou liberar domínio com um toque) |
+| **Rede** | **Monitor de sites e serviços** (HTTP e portas, latência, uptime 24 h, alerta de **internet caiu/voltou**); aparelhos com **fabricante**, **apelidos**, **aviso de aparelho novo**, **atividade por aparelho** (consultas DNS), **bloqueio de internet por aparelho e horário** e Wake-on-LAN |
 | **Apps** | **Home Assistant** (resumo, luzes/interruptores com liga-desliga) e **Jellyfin** (biblioteca e quem está assistindo agora) |
-| **Sistema** | Informações do host, discos, **atualizações de pacotes (apt)** com aviso de segurança e de reinicialização, **backups** (último sucesso, próxima execução, executar agora), atualizações do BUREAU, notificações e aparelhos, reiniciar/desligar |
+| **Sistema** | Host e discos, **pacotes (apt)**, **backups**, atualizações do BUREAU, **terminal** (SSH no seu usuário), **registro de acessos** (IP, país, aparelho; alerta de acesso novo e de senhas erradas), **backup/restauração do BUREAU**, notificações, aparelhos e energia |
 | **Alertas** | Push quando um serviço ou contêiner cai, falta energia, o disco enche, a CPU esquenta, o Pi-hole/Home Assistant/Jellyfin param, um backup falha ou atrasa, surgem atualizações de segurança ou o sistema pede reinicialização |
 
 **App mobile:** o mesmo painel como app Android (APK nas releases), com push nativo. No iPhone, funciona como PWA com Web Push (o projeto iOS nativo também está incluído). Guia completo: [docs/app-mobile.md](docs/app-mobile.md).
@@ -99,6 +99,7 @@ Baixe o `bureau-android.apk` da release, informe o endereço do servidor e a sen
 | `Jellyfin.Enabled` / `Url` / `ApiKey` | `false` / `http://127.0.0.1:8096` / — | Chave em Painel → Avançado → Chaves de API |
 | `Backups` | `[]` | Lista de `{ "Name", "Unit", "MaxAgeHours" }` — serviços systemd de backup (restic, borg, rsync…) |
 | `SystemUpdates` | `true` | Mostra/aplica atualizações de pacotes (apt) |
+| `Terminal.Enabled` / `User` / `Port` | `false` / — / `22` | Terminal no navegador/app: SSH para esse usuário em 127.0.0.1 (pede a senha do Linux) |
 
 Trocar a senha:
 
@@ -121,7 +122,9 @@ sudo BUREAU_CONFIG=/etc/bureau/bureau.json /opt/bureau/bureau set-password && su
 - O processo roda como usuário sem privilégios, com `ProtectSystem=strict`; a escalada é limitada pelo polkit a gerenciar unidades systemd e reiniciar/desligar.
 - Ações só aceitam serviços que estão na lista de monitorados; nada é passado a um shell.
 - O app mobile usa um token por aparelho (só o hash fica no servidor), revogável em *Sistema → Aparelhos*; o CORS só libera as origens do app.
-- Não exponha a porta 8420 diretamente na internet — use o Tailscale (ou outro túnel/VPN).
+- **Terminal** desligado por padrão; quando ligado, usa SSH local para o seu usuário (pede a senha do Linux), com tíquete de uso único por sessão — nunca roda como root.
+- Registro de acessos com alerta para login de IP nunca visto e para 5 senhas erradas em 10 min. No app, desbloqueio opcional por biometria.
+- Não exponha a porta 8420 diretamente na internet — use o Tailscale ou um túnel (Cloudflare).
 
 ## Desenvolvimento
 
@@ -171,6 +174,8 @@ install.sh / uninstall.sh / build.sh
 - [x] Push nativo no iOS (APNs)
 - [x] Integrações: Home Assistant, Jellyfin, backups, atualizações do apt
 - [x] Histórico de métricas persistido (até 90 dias)
+- [x] Monitor de sites/serviços, aparelho novo, consultas DNS ao vivo, bloqueio por horário, terminal, biometria, registro de acessos, backup do BUREAU
+- [ ] Uso de banda em bytes por aparelho (exige o servidor como gateway ou integração com o roteador)
 
 ## Licença
 

@@ -16,17 +16,27 @@ public static class Api
         (typeof(Api).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.0.0")
         .Split('+')[0];
 
+    static bool CheckPassword(string? password, BureauOptions o, IHostEnvironment env) =>
+        string.IsNullOrEmpty(o.PasswordHash) && env.IsDevelopment()
+            ? password == "bureau" // senha padrão só em desenvolvimento
+            : PasswordHasher.Verify(password ?? "", o.PasswordHash);
+
+    static void Audit(HttpContext ctx, AccessLog access, AlertEngine alerts, string method, bool ok, string? device)
+    {
+        var (known, failures) = access.Record(ctx, method, ok, device);
+        alerts.OnLogin(access.Recent[0], known, failures);
+    }
+
     public static void MapApi(this WebApplication app)
     {
         // ── Autenticação ────────────────────────────────────
         var auth = app.MapGroup("/api/auth");
 
-        auth.MapPost("/login", async (LoginRequest req, HttpContext ctx, IOptionsMonitor<BureauOptions> o, IHostEnvironment env) =>
+        auth.MapPost("/login", async (LoginRequest req, HttpContext ctx, IOptionsMonitor<BureauOptions> o, IHostEnvironment env,
+            AccessLog access, AlertEngine alerts) =>
         {
-            var hash = o.CurrentValue.PasswordHash;
-            var ok = string.IsNullOrEmpty(hash) && env.IsDevelopment()
-                ? req.Password == "bureau" // senha padrão só em desenvolvimento
-                : PasswordHasher.Verify(req.Password ?? "", hash);
+            var ok = CheckPassword(req.Password, o.CurrentValue, env);
+            Audit(ctx, access, alerts, "web", ok, null);
             if (!ok)
             {
                 await Task.Delay(350);
@@ -44,19 +54,21 @@ public static class Api
             return TypedResults.Ok(new OkResponse(true, null));
         });
 
-        auth.MapGet("/me", (HttpContext ctx, IOptionsMonitor<BureauOptions> o) =>
+        auth.MapGet("/me", (HttpContext ctx, IOptionsMonitor<BureauOptions> o, TerminalModule term) =>
         {
             var authed = ctx.User.Identity?.IsAuthenticated == true;
-            return TypedResults.Ok(new MeResponse(authed, authed ? Environment.MachineName : null, Version, o.CurrentValue.AllowPower));
+            return TypedResults.Ok(new MeResponse(authed, authed ? Environment.MachineName : null, Version, o.CurrentValue.AllowPower, authed && term.Enabled));
         });
 
+        // Terminal: o WebSocket não carrega cookie/token de forma confiável (app) → usa tíquete de uso único.
+        app.Map("/api/terminal/ws", (HttpContext ctx, TerminalModule term) => term.HandleAsync(ctx));
+
         // App mobile: troca a senha por um token de aparelho (revogável).
-        auth.MapPost("/token", async (TokenRequest req, IOptionsMonitor<BureauOptions> o, IHostEnvironment env, DeviceTokens tokens) =>
+        auth.MapPost("/token", async (TokenRequest req, HttpContext ctx, IOptionsMonitor<BureauOptions> o, IHostEnvironment env,
+            DeviceTokens tokens, AccessLog access, AlertEngine alerts) =>
         {
-            var hash = o.CurrentValue.PasswordHash;
-            var ok = string.IsNullOrEmpty(hash) && env.IsDevelopment()
-                ? req.Password == "bureau"
-                : PasswordHasher.Verify(req.Password ?? "", hash);
+            var ok = CheckPassword(req.Password, o.CurrentValue, env);
+            Audit(ctx, access, alerts, "app", ok, req.Name);
             if (!ok)
             {
                 await Task.Delay(350);
@@ -67,6 +79,8 @@ public static class Api
         }).RequireRateLimiting("login");
 
         var api = app.MapGroup("/api").RequireAuthorization();
+
+        api.MapGet("/auth/access", (AccessLog access) => TypedResults.Ok(access.Recent));
 
         api.MapGet("/auth/tokens", (HttpContext ctx, DeviceTokens tokens) =>
         {
@@ -198,6 +212,32 @@ public static class Api
 
         // ── Integrações ─────────────────────────────────────
         api.MapPost("/homeassistant/toggle", async (EntityRequest req, HomeAssistantModule h) => TypedResults.Ok(await h.ToggleAsync(req.EntityId)));
+
+        // ── Pi-hole interativo / bloqueio de aparelhos ──────
+        api.MapGet("/pihole/queries", async (PiHoleModule p) => TypedResults.Ok(await p.QueriesAsync()));
+        api.MapPost("/pihole/domain", async (DomainRequest req, PiHoleModule p) => TypedResults.Ok(await p.SetDomainAsync(req.Domain, req.List)));
+        api.MapPut("/network/block", (BlockRule rule, DeviceBlocks b) => TypedResults.Ok(b.Upsert(rule)));
+        api.MapDelete("/network/block/{mac}", (string mac, DeviceBlocks b) => TypedResults.Ok(b.Remove(mac)));
+
+        api.MapPost("/terminal/ticket", (HttpContext ctx, TerminalModule term, AccessLog access) =>
+        {
+            var t = term.IssueTicket();
+            if (t is null) return TypedResults.Ok(new OkResponse(false, "Terminal desativado na configuração"));
+            access.Record(ctx, "terminal", true, ctx.User.FindFirst("device") is null ? null : "app");
+            return TypedResults.Ok(new OkResponse(true, t));
+        });
+
+        // ── Backup da configuração do BUREAU ───────────────
+        api.MapGet("/backup/export", (HttpContext ctx, ConfigBackup b) =>
+        {
+            ctx.Response.Headers.ContentDisposition = $"attachment; filename=\"bureau-backup-{DateTime.Now:yyyy-MM-dd}.json\"";
+            return TypedResults.Ok(b.Export());
+        });
+        api.MapPost("/backup/import", (BackupBundle bundle, ConfigBackup b) => TypedResults.Ok(b.Import(bundle)));
+
+        // ── Monitores (uptime) ──────────────────────────────
+        api.MapGet("/monitors", (MonitorsModule m) => TypedResults.Ok(m.Definitions));
+        api.MapPut("/monitors", (MonitorDef[] defs, MonitorsModule m) => TypedResults.Ok(m.Save(defs)));
 
         // ── Histórico de métricas ───────────────────────────
         api.MapGet("/metrics", (string? range, MetricsStore m) => TypedResults.Ok(m.Query(range ?? "24h")));

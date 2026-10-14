@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 namespace Bureau.Modules;
 
 /// <summary>Integração com a API REST do Pi-hole v6 (sessão reaproveitada via X-FTL-SID).</summary>
-public sealed class PiHoleModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<BureauOptions> opts, ILogger<PiHoleModule> log) : IDisposable
+public sealed partial class PiHoleModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<BureauOptions> opts, ILogger<PiHoleModule> log) : IDisposable
 {
     readonly HttpClient _http = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
     {

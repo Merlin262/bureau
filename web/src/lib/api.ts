@@ -1,4 +1,4 @@
-import type { AlertEvent, DeviceSummary, Me, MetricsSeries, OkResponse, PushConfig, UnitEntry, UpdateStatus } from './types'
+import type { AccessEntry, AlertEvent, BlockRule, DeviceSummary, DnsQuery, Me, MetricsSeries, MonitorDef, OkResponse, PushConfig, UnitEntry, UpdateStatus } from './types'
 import { store } from './store.svelte'
 import { conn } from './platform'
 
@@ -61,6 +61,16 @@ export const api = {
   backupRun: (unit: string) => req<OkResponse>('POST', `/api/backups/${enc(unit)}/run`),
   backupLogs: (unit: string) => req<{ text: string }>('GET', `/api/backups/${enc(unit)}/logs`),
   haToggle: (entityId: string) => req<OkResponse>('POST', '/api/homeassistant/toggle', { entityId }),
+  monitors: () => req<MonitorDef[]>('GET', '/api/monitors'),
+  saveMonitors: (defs: MonitorDef[]) => req<OkResponse>('PUT', '/api/monitors', defs),
+  queries: () => req<DnsQuery[]>('GET', '/api/pihole/queries'),
+  domain: (domain: string, list: 'deny' | 'allow') => req<OkResponse>('POST', '/api/pihole/domain', { domain, list }),
+  block: (rule: BlockRule) => req<OkResponse>('PUT', '/api/network/block', rule),
+  unblock: (mac: string) => req<OkResponse>('DELETE', `/api/network/block/${enc(mac)}`),
+  access: () => req<AccessEntry[]>('GET', '/api/auth/access'),
+  terminalTicket: () => req<OkResponse>('POST', '/api/terminal/ticket'),
+  backupExport: () => req<unknown>('GET', '/api/backup/export'),
+  backupImport: (bundle: unknown) => req<OkResponse>('POST', '/api/backup/import', bundle),
   updateRun: () => req<OkResponse>('POST', '/api/update/run'),
 
   pushConfig: () => req<PushConfig>('GET', '/api/push/config'),

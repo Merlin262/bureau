@@ -5,13 +5,16 @@
   import HoldButton from '../components/HoldButton.svelte'
   import Sq from '../components/Sq.svelte'
   import LogViewer from '../components/LogViewer.svelte'
-  import { store, act, disconnect } from '../lib/store.svelte'
+  import TerminalView from '../components/TerminalView.svelte'
+  import Modal from '../components/Modal.svelte'
+  import { bioAvailable, bioEnabled, setBio } from '../lib/biometric'
+  import { store, act, disconnect, toast } from '../lib/store.svelte'
   import { api } from '../lib/api'
   import { sfx } from '../lib/sfx'
   import { bytes, duration, pct } from '../lib/format'
   import { clearToken, isNative, platform } from '../lib/platform'
   import { disablePush, enablePush, nativePushAvailable, pushAvailable, pushRegisteredId } from '../lib/push'
-  import type { DeviceSummary, PushConfig, UpdateStatus } from '../lib/types'
+  import type { AccessEntry, DeviceSummary, PushConfig, UpdateStatus } from '../lib/types'
   import { onDestroy } from 'svelte'
 
   const h = $derived(store.host)
@@ -93,6 +96,53 @@
     if (!unix) return 'nunca'
     const m = Math.round((Date.now() / 1000 - unix) / 60)
     return m < 1 ? 'agora' : m < 60 ? `há ${m} min` : `há ${Math.round(m / 60)} h`
+  }
+
+  // ── Terminal, acessos, backup do BUREAU, biometria ──
+  let terminal = $state(false)
+  let access = $state<AccessEntry[]>([])
+  const loadAccess = async () => { try { access = await api.access() } catch { /* offline */ } }
+  loadAccess()
+  const METHOD: Record<string, string> = { web: 'NAVEGADOR', app: 'APP', terminal: 'TERMINAL' }
+  const flag = (c?: string) => (c && c.length === 2 ? String.fromCodePoint(...[...c.toUpperCase()].map((ch) => 0x1f1a5 + ch.charCodeAt(0))) : '')
+
+  let restoring = $state<{ host: string; created: number; appVersion: string; files: Record<string, string>; [k: string]: unknown } | null>(null)
+  async function exportBackup() {
+    if (isNative) return toast('Exporte pelo navegador (o arquivo contém segredos e é baixado direto).', 'info')
+    await act('bexp', '', async () => {
+      const data = await api.backupExport()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `bureau-backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000)
+      return { ok: true, message: 'Backup exportado — guarde em local seguro' }
+    })
+  }
+  async function pickBackup(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0]
+    ;(e.target as HTMLInputElement).value = ''
+    if (!file) return
+    try {
+      const data = JSON.parse(await file.text())
+      if (data.kind !== 'bureau-backup') throw new Error('Arquivo não é um backup do BUREAU')
+      restoring = data
+    } catch (err) { toast(err instanceof Error ? err.message : String(err), 'err') }
+  }
+  async function restore() {
+    const b = restoring!
+    restoring = null
+    await act('bimp', '', () => api.backupImport(b))
+  }
+
+  let bioOn = $state(bioEnabled())
+  let bioOk = $state(false)
+  bioAvailable().then((v) => (bioOk = v))
+  async function toggleBio() {
+    const r = await setBio(!bioOn)
+    if (r.ok) bioOn = !bioOn
+    toast(r.message ?? '', r.ok ? 'ok' : 'err')
   }
 
   // ── Pacotes e backups ──
@@ -241,11 +291,67 @@
 </div>
 
 <div class="grid cols">
+  <Panel label="TERMINAL">
+    {#if store.me?.terminal}
+      <p class="dim small warn">Shell do servidor via SSH no seu usuário — o Linux pede a sua senha. Cada abertura fica no registro de acessos.</p>
+      <button class="btn on" onclick={() => (terminal = true)}>Abrir terminal ▸</button>
+    {:else}
+      <p class="dim small">Desativado. Para ligar (pede a senha do Linux a cada sessão), em <code>/etc/bureau/bureau.json</code>:</p>
+      <pre class="cfg">"Terminal": {'{'} "Enabled": true, "User": "seu-usuario-linux" {'}'}</pre>
+      <p class="dim small">Requer o servidor SSH (<code>sudo apt install openssh-server</code>).</p>
+    {/if}
+  </Panel>
+
+  <Panel label="BACKUP DO BUREAU">
+    <p class="dim small warn">Apelidos, monitores, bloqueios, aparelhos conectados, alertas, chaves de push e configuração — para reinstalar sem perder nada. <b>Contém segredos</b>: guarde com cuidado.</p>
+    <div class="actions">
+      <button class="btn" class:busy={!!store.pending.bexp} onclick={exportBackup}>Exportar</button>
+      <label class="btn">Importar…<input type="file" accept="application/json,.json" hidden onchange={pickBackup} /></label>
+    </div>
+  </Panel>
+</div>
+
+<Panel label="REGISTRO DE ACESSOS" class="access">
+  {#snippet aside()}<button class="btn mini" onclick={loadAccess}>Atualizar</button>{/snippet}
+  {#each access.slice(0, 25) as a}
+    <div class="acc" class:fail={!a.ok}>
+      <span class="mono dim num">{when(a.ts)}</span>
+      <span class="mono">{a.ok ? '✓' : '✗'} {METHOD[a.method] ?? a.method}</span>
+      <span class="mono num">{flag(a.country)} {a.ip}</span>
+      <span class="dev-name">{a.device}</span>
+    </div>
+  {:else}
+    <p class="empty">Nenhum acesso registrado.</p>
+  {/each}
+</Panel>
+
+{#if terminal}<TerminalView onclose={() => (terminal = false)} />{/if}
+
+{#if restoring}
+  <Modal title="Restaurar backup" onclose={() => (restoring = null)}>
+    <dl>
+      <dt>ORIGEM</dt><dd>{restoring.host}</dd>
+      <dt>CRIADO</dt><dd>{when(restoring.created)}</dd>
+      <dt>VERSÃO</dt><dd class="mono">v{restoring.appVersion}</dd>
+      <dt>ARQUIVOS</dt><dd class="mono small">{Object.keys(restoring.files ?? {}).join(', ')}</dd>
+    </dl>
+    <p class="dim small warn">Os dados atuais serão substituídos e o BUREAU reinicia em seguida.</p>
+    <HoldButton label="Restaurar" onconfirm={restore} />
+  </Modal>
+{/if}
+
+<div class="grid cols">
   <Panel label="PREFERÊNCIAS">
     <div class="pref">
       <div><div class="name">Efeitos sonoros</div><div class="dim small">Bipes de interface ao navegar e confirmar.</div></div>
       <button class="btn" class:on={sound} onclick={toggleSound}>{sound ? 'Ligado' : 'Desligado'}</button>
     </div>
+    {#if isNative && bioOk}
+      <div class="pref">
+        <div><div class="name">Biometria</div><div class="dim small">Exigir digital/rosto ao abrir o app.</div></div>
+        <button class="btn" class:on={bioOn} onclick={toggleBio}>{bioOn ? 'Ligada' : 'Desligada'}</button>
+      </div>
+    {/if}
     <div class="pref">
       <div><div class="name">Encerrar sessão</div><div class="dim small">Sai deste dispositivo.</div></div>
       <button class="btn" onclick={logout}>Sair</button>
@@ -320,4 +426,14 @@
   .chans b.off { color: var(--fg-mute); }
   .dev { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
   .cur { font-size: 11px; }
+  :global(.access) { margin-bottom: 14px; }
+  .acc { display: grid; grid-template-columns: 96px 110px 170px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); align-items: center; font-size: 13px; }
+  .acc .mono { font-size: 11px; }
+  .acc.fail .mono:nth-child(2) { color: var(--red); }
+  .dev-name { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .btn.mini { height: 24px; padding: 0 8px; font-size: 10px; }
+  @media (max-width: 700px) {
+    .acc { grid-template-columns: 86px 1fr; }
+    .acc .dev-name { grid-column: 1 / -1; }
+  }
 </style>
