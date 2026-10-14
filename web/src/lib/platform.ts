@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core'
+import { Preferences } from '@capacitor/preferences'
 
 /** true dentro do app Android/iOS (Capacitor); false no navegador/PWA. */
 export const isNative = Capacitor.isNativePlatform()
@@ -13,29 +14,26 @@ export const conn = { base: '', token: '' }
 const KEY_BASE = 'bureau.server'
 const KEY_TOKEN = 'bureau.token'
 
-async function prefs() {
-  return (await import('@capacitor/preferences')).Preferences
-}
+// Atenção: nunca retorne um plugin do Capacitor de uma função async (nem faça "await plugin").
+// O await procura um método .then() no proxy do plugin, que lança "not implemented" e trava.
 
 export async function loadConnection() {
   if (!isNative) return
-  const p = await prefs()
-  conn.base = (await p.get({ key: KEY_BASE })).value ?? ''
-  conn.token = (await p.get({ key: KEY_TOKEN })).value ?? ''
+  conn.base = (await Preferences.get({ key: KEY_BASE })).value ?? ''
+  conn.token = (await Preferences.get({ key: KEY_TOKEN })).value ?? ''
 }
 
 export async function saveConnection(base: string, token: string) {
   conn.base = base
   conn.token = token
   if (!isNative) return
-  const p = await prefs()
-  await p.set({ key: KEY_BASE, value: base })
-  await p.set({ key: KEY_TOKEN, value: token })
+  await Preferences.set({ key: KEY_BASE, value: base })
+  await Preferences.set({ key: KEY_TOKEN, value: token })
 }
 
 export async function clearToken() {
   conn.token = ''
-  if (isNative) await (await prefs()).remove({ key: KEY_TOKEN })
+  if (isNative) await Preferences.remove({ key: KEY_TOKEN })
 }
 
 /** Aceita "192.168.0.5", "servidor:8420", "https://x.ts.net" … e devolve uma URL base limpa. */
