@@ -175,3 +175,21 @@ input.field::placeholder { color: var(--fg-mute); text-transform: uppercase; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* Erro fatal de inicialização (ver main.ts) */
+#fatal {
+  position: fixed;
+  inset: auto 12px calc(12px + var(--safe-b)) 12px;
+  z-index: 200;
+  max-height: 60vh;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--red);
+  border-left-width: 3px;
+  background: #140707;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

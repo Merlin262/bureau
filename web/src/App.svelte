@@ -22,7 +22,11 @@
   const tickClock = () => (clock = new Date().toLocaleTimeString('pt-BR', { hour12: false }))
 
   async function boot() {
-    await loadConnection()
+    try {
+      await loadConnection()
+    } catch (e) {
+      console.error('Falha ao ler a conexão salva', e)
+    }
     if (isNative && !conn.token) {
       store.authed = false
       return
@@ -124,11 +128,14 @@
       {/key}
     </main>
   </div>
+{:else}
+  <div class="booting mono"><span class="red">■</span> ESTABELECENDO CONTATO…</div>
 {/if}
 
 <Toasts />
 
 <style>
+  .booting { min-height: 100dvh; display: grid; place-items: center; color: var(--fg-dim); animation: blink 1.2s steps(2) infinite; }
   .shell {
     display: grid;
     grid-template-columns: var(--nav-w) minmax(0, 1fr);
