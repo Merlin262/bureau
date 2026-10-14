@@ -44,7 +44,13 @@ jobs:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
           if [ -n "$GOOGLE_SERVICES_JSON" ]; then
-            echo "$GOOGLE_SERVICES_JSON" | base64 -d > web/android/app/google-services.json
+            # Aceita o JSON colado direto ou em base64 (com ou sem quebras de linha/CR do Windows).
+            if printf '%s' "$GOOGLE_SERVICES_JSON" | grep -q '^[[:space:]]*{'; then
+              printf '%s' "$GOOGLE_SERVICES_JSON" > web/android/app/google-services.json
+            else
+              printf '%s' "$GOOGLE_SERVICES_JSON" | tr -d '[:space:]' | base64 -d > web/android/app/google-services.json
+            fi
+            python3 -c "import json;d=json.load(open('web/android/app/google-services.json'));print('Firebase:', d['project_info']['project_id'], '/', d['client'][0]['client_info']['android_client_info']['package_name'])"
             echo "VITE_FCM=1" >> "$GITHUB_ENV"
             echo "Push nativo habilitado."
           else
@@ -59,7 +65,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > web/android/release.jks
+            printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > web/android/release.jks
             printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
               "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEY_PASSWORD" > web/android/keystore.properties
             echo "GRADLE_TASK=assembleRelease" >> "$GITHUB_ENV"
