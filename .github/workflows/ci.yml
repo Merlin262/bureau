@@ -51,11 +51,21 @@ jobs:
         run: dotnet build server/Bureau.csproj -c Release -warnaserror
 
       - name: Testes (xUnit) com cobertura
-        run: >
-          dotnet test --project tests/Bureau.Tests -c Release
-          --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
-          --coverage-settings tests/Bureau.Tests/coverage.settings.xml
-          --results-directory TestResults
+        run: |
+          set -o pipefail
+          dotnet test --project tests/Bureau.Tests -c Release             --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml             --coverage-settings tests/Bureau.Tests/coverage.settings.xml             --results-directory TestResults 2>&1 | tee test.log
+
+      - name: Testes que falharam
+        if: failure()
+        run: |
+          # Cada falha vira uma anotação (visível no resumo da execução) e vai para o resumo.
+          awk '/^failed /{p=1; n=0} p{print; if(++n>=14){p=0; print "---"}}' test.log > failed.txt || true
+          { echo '### Testes que falharam'; echo '```'; cat failed.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          grep '^failed ' test.log | while read -r line; do
+            msg=$(grep -A8 -F "$line" test.log | tr '
+' ' ' | cut -c1-900)
+            echo "::error title=Teste falhou::$msg"
+          done
 
       - name: Resumo e mínimo de cobertura
         run: python3 scripts/coverage-summary.py TestResults/coverage.cobertura.xml --title Servidor --min 75 >> "$GITHUB_STEP_SUMMARY"
