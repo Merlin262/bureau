@@ -354,14 +354,14 @@ public class ConfigBackupTests
 
         using var target = new Fx();
         var b2 = new ConfigBackup(target.Opt, life, Fx.Log<ConfigBackup>());
-        var files = new Dictionary<string, string>(bundle.Files) { ["../../etc/passwd"] = "{}", ["monitors.json"] = "[]" };
+        var files = new Dictionary<string, string>(bundle.Files) { ["../../bureau-invasor.json"] = "{}", ["monitors.json"] = "[]" };
         var r = b2.Import(bundle with { Files = files, Config = """{"Port":8420}""" });
         Assert.True(r.Ok);
         Assert.StartsWith("2 arquivo(s) restaurado(s)", r.Message);
         Assert.Contains("bureau.json.restaurado", r.Message);
         Assert.Equal("""{"aa:bb:cc:dd:ee:ff":"TV"}""", File.ReadAllText(target.Dir.File("aliases.json")));
         Assert.True(File.Exists(target.Dir.File("bureau.json.restaurado")));
-        Assert.False(File.Exists(Path.Combine(target.Dir.Path, "..", "..", "etc", "passwd")));
+        Assert.False(File.Exists(Path.GetFullPath(Path.Combine(target.Dir.Path, "..", "..", "bureau-invasor.json"))));
 
         await Task.Delay(1800, TestContext.Current.CancellationToken);
         Assert.True(life.Stopped); // reinicia para os módulos lerem os arquivos
