@@ -70,8 +70,9 @@ if [[ -n "$LOCAL_DIR" ]]; then
   VERSION="local"
   say "Usando build local: $SRC"
 else
-  VERSION=$(curl -fsSL -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep -m1 '"tag_name"' | cut -d'"' -f4 || true)
+  # Redirecionamento de releases/latest → …/tag/vX.Y.Z (sem o limite de 60 consultas/h da API).
+  VERSION=$(curl -fsSI "https://github.com/$REPO/releases/latest" | tr -d '\r' \
+    | sed -n 's#^[Ll]ocation: .*/releases/tag/##p' | head -n1 || true)
   [[ -n "$VERSION" ]] || die "Nenhuma release encontrada em github.com/$REPO (--repo usuario/bureau ou --local)."
   say "Baixando $VERSION ($RID) de github.com/$REPO"
   curl -fsSL "https://github.com/$REPO/releases/download/$VERSION/bureau-$RID.tar.gz" -o "$TMP/bureau.tgz" \

@@ -74,8 +74,14 @@ on_error() {
 }
 trap on_error ERR
 
-LATEST=$(curl -fsSL --max-time 20 -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4) || true
+# Versão mais recente pelo redirecionamento de github.com/…/releases/latest (→ …/tag/vX.Y.Z): não conta no
+# limite da API do GitHub (60 consultas/h por IP, compartilhado com todos os aparelhos da casa). API só como reserva.
+LATEST=$(curl -fsSI --max-time 20 "https://github.com/$REPO/releases/latest" \
+  | tr -d '\r' | sed -n 's#^[Ll]ocation: .*/releases/tag/##p' | head -n1) || true
+if [[ -z "${LATEST:-}" ]]; then
+  LATEST=$(curl -fsSL --max-time 20 -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/$REPO/releases/latest" | grep -m1 '"tag_name"' | cut -d'"' -f4) || true
+fi
 if [[ -z "${LATEST:-}" ]]; then
   state erro "Não foi possível consultar as releases no GitHub"
   exit 0
