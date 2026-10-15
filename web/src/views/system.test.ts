@@ -60,6 +60,8 @@ function routes() {
   http.on('GET /api/auth/access', [
     { ts: 1700000000, ip: '203.0.113.9', country: 'BR', method: 'web', ok: true, device: 'Chrome · Windows' },
     { ts: 1700000001, ip: '10.0.0.2', method: 'ssh', ok: false, device: '?' },
+    { ts: 1700000002, ip: '2001:1284:F502:A16D:614B:D7F6:A379:47F1', country: 'BR', method: 'app', ok: true, device: 'Android' },
+    { ts: 1700000003, ip: 'fe80::1', method: 'app', ok: true, device: 'Android' },
   ])
 }
 
@@ -103,7 +105,10 @@ describe('Sistema', () => {
     expect(container.textContent).toContain('e o ntfy')
     expect(container.textContent).toContain('SESSÃO DO APP')
     expect(container.textContent).toContain('PUSH · NAVEGADOR')
-    expect(container.textContent).toContain('🇧🇷 203.0.113.9')
+    expect(container.textContent).toContain('BR203.0.113.9')
+    expect(container.textContent).toContain('2001:1284:f502:a16d:…') // IPv6 abreviado (completo no title)
+    expect(container.querySelector('[title="2001:1284:F502:A16D:614B:D7F6:A379:47F1"]')).toBeTruthy()
+    expect(container.textContent).toContain('fe80::1')
     expect(container.textContent).toContain('ssh')
     expect(container.textContent).toContain('há 10 min')
 

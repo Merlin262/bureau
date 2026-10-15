@@ -104,7 +104,12 @@
   const loadAccess = async () => { try { access = await api.access() } catch { /* offline */ } }
   loadAccess()
   const METHOD: Record<string, string> = { web: 'NAVEGADOR', app: 'APP', terminal: 'TERMINAL' }
-  const flag = (c?: string) => (c && c.length === 2 ? String.fromCodePoint(...[...c.toUpperCase()].map((ch) => 0x1f1a5 + ch.charCodeAt(0))) : '')
+  // IPv6: os 4 primeiros grupos identificam a rede (provedor/casa); o resto muda por aparelho e por dia.
+  const shortIp = (ip: string) => {
+    if (!ip.includes(':')) return ip
+    const g = ip.toLowerCase().split(':')
+    return g.length > 4 ? `${g.slice(0, 4).join(':')}:…` : ip.toLowerCase()
+  }
 
   let restoring = $state<{ host: string; created: number; appVersion: string; files: Record<string, string>; [k: string]: unknown } | null>(null)
   async function exportBackup() {
@@ -325,7 +330,7 @@
     <div class="acc" class:fail={!a.ok}>
       <span class="mono dim num">{when(a.ts)}</span>
       <span class="mono">{a.ok ? '✓' : '✗'} {METHOD[a.method] ?? a.method}</span>
-      <span class="mono num">{flag(a.country)} {a.ip}</span>
+      <span class="mono num ip" title={a.ip}>{#if a.country}<span class="cc">{a.country}</span>{/if}{shortIp(a.ip)}</span>
       <span class="dev-name">{a.device}</span>
     </div>
   {:else}
@@ -435,13 +440,15 @@
   .dev { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
   .cur { font-size: 11px; }
   :global(.access) { margin-bottom: 14px; }
-  .acc { display: grid; grid-template-columns: 96px 110px 170px minmax(0, 1fr); gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); align-items: center; font-size: 13px; }
+  .acc { display: grid; grid-template-columns: 96px 100px minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); align-items: center; font-size: 13px; }
   .acc .mono { font-size: 11px; }
   .acc.fail .mono:nth-child(2) { color: var(--red); }
-  .dev-name { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dev-name { color: var(--fg-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+  .ip { display: flex; align-items: center; gap: 6px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cc { flex: none; padding: 0 4px; border: 1px solid var(--line-2); font-size: 9px; line-height: 14px; color: var(--fg-dim); }
   .btn.mini { height: 24px; padding: 0 8px; font-size: 10px; }
   @media (max-width: 700px) {
     .acc { grid-template-columns: 86px 1fr; }
-    .acc .dev-name { grid-column: 1 / -1; }
+    .acc .ip, .acc .dev-name { grid-column: 1 / -1; text-align: left; }
   }
 </style>
