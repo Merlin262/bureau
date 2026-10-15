@@ -96,7 +96,7 @@ public sealed class NetworkModule
     {
         FirstSeen = _firstSeen.GetValueOrDefault(d.Mac.ToLowerInvariant()),
         Alias = _aliases.GetValueOrDefault(d.Mac.ToLowerInvariant()),
-        Vendor = d.Vendor ?? MacVendors.Lookup(d.Mac),
+        Vendor = MacVendors.Lookup(d.Mac) ?? d.Vendor,
         RandomMac = MacVendors.IsRandom(d.Mac),
         Name = d.Name == "_gateway" ? "Roteador" : d.Name, // nome sintético do systemd-resolved
     };
@@ -109,12 +109,14 @@ public sealed class NetworkModule
             return;
         }
 
+        var lan = LanNetworks();
         var byMac = new Dictionary<string, DeviceInfo>(StringComparer.OrdinalIgnoreCase);
         foreach (var line in File.ReadLines("/proc/net/arp").Skip(1))
         {
             // IP  HWtype  Flags  HWaddress  Mask  Device
             var f = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (f.Length < 6 || f[2] != "0x2" || f[3] == "00:00:00:00:00:00") continue;
+            if (!InLan(f[0], lan)) continue; // contêineres (docker0), Tailscale e outras redes virtuais
             byMac[f[3]] = new DeviceInfo(f[0], f[3], null, null, true, f[5]);
         }
 
@@ -122,7 +124,7 @@ public sealed class NetworkModule
         RememberSeen(byMac.Values);
         // Aparelhos vistos nos últimos 7 dias continuam na lista (offline) — essencial para o Wake-on-LAN.
         foreach (var (seenMac, ts) in _lastSeen)
-            if (ts > cutoff && !byMac.ContainsKey(seenMac) && _lastIp.TryGetValue(seenMac, out var lastIp))
+            if (ts > cutoff && !byMac.ContainsKey(seenMac) && _lastIp.TryGetValue(seenMac, out var lastIp) && InLan(lastIp, lan))
                 byMac[seenMac] = new DeviceInfo(lastIp, seenMac, null, null, false, null);
 
         foreach (var d in await _pihole.GetDevicesAsync(ct))
@@ -130,7 +132,7 @@ public sealed class NetworkModule
             if (d.Mac.StartsWith("ip-") || d.Mac.Length != 17) continue;
             if (byMac.TryGetValue(d.Mac, out var cur))
                 byMac[d.Mac] = cur with { Name = d.Name, Vendor = d.Vendor };
-            else if (d.Ip is not null && d.LastQuery > cutoff)
+            else if (d.Ip is not null && d.LastQuery > cutoff && InLan(d.Ip, lan))
                 byMac[d.Mac] = new DeviceInfo(d.Ip, d.Mac, d.Name, d.Vendor, false, null);
         }
 
@@ -154,6 +156,31 @@ public sealed class NetworkModule
         catch { /* sem PTR */ }
         _dns[ip] = (name, DateTime.UtcNow);
         return name;
+    }
+
+    /// <summary>Sub-redes IPv4 das placas de rede físicas (Wi-Fi/cabo) — exclui docker0, br-*, veth*, tailscale0…</summary>
+    static List<(uint Net, uint Mask)> LanNetworks()
+    {
+        var nets = new List<(uint, uint)>();
+        foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (!Directory.Exists($"/sys/class/net/{nic.Name}/device")) continue;
+            foreach (var ua in nic.GetIPProperties().UnicastAddresses)
+            {
+                if (ua.Address.AddressFamily != AddressFamily.InterNetwork || ua.IPv4Mask is null) continue;
+                var ip = IpKey(ua.Address.ToString());
+                var mask = IpKey(ua.IPv4Mask.ToString());
+                nets.Add((ip & mask, mask));
+            }
+        }
+        return nets;
+    }
+
+    static bool InLan(string ip, List<(uint Net, uint Mask)> lan)
+    {
+        if (lan.Count == 0) return true; // sem informação: não filtra
+        var k = IpKey(ip);
+        return k != uint.MaxValue && lan.Any(n => (k & n.Mask) == n.Net);
     }
 
     static uint IpKey(string ip) =>
