@@ -265,15 +265,13 @@ describe('biometria', () => {
     expect((await bio.setBio(false)).message).toBe('Biometria desativada')
   })
 
-  it('trava ao abrir e ao voltar depois de 1 min', async () => {
+  it('trava ao abrir e ao voltar depois de 1 min, sem abrir a biometria sozinha', async () => {
     const { m, bio, store } = await load('ios')
     localStorage.setItem('bureau.bio', '1')
-    let release!: () => void
-    m.verify.mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
     await bio.initBioLock()
     expect(store.locked).toBe(true)
-    release()
-    await flush()
+    expect(m.verify).not.toHaveBeenCalled() // só abre com o toque em "Desbloquear"
+    await bio.unlock()
     expect(store.locked).toBe(false)
 
     const now = vi.spyOn(Date, 'now')
@@ -284,10 +282,13 @@ describe('biometria', () => {
     expect(store.locked).toBe(false) // só 30 s
     m.appListeners.appStateChange({ isActive: false } as never)
     now.mockReturnValue(1_100_000)
-    m.verify.mockRejectedValueOnce(new Error('não'))
     m.appListeners.appStateChange({ isActive: true } as never)
     expect(store.locked).toBe(true)
-    await flush()
+    expect(m.verify).toHaveBeenCalledTimes(1)
+
+    m.verify.mockRejectedValueOnce(new Error('não'))
+    await bio.unlock()
+    expect(store.locked).toBe(true)
     expect(store.lockError).toBe('não')
   })
 
@@ -295,27 +296,21 @@ describe('biometria', () => {
     const { m, bio, store } = await load('android')
     localStorage.setItem('bureau.bio', '1')
     await bio.initBioLock()
-    await flush()
-    expect(store.locked).toBe(false)
-    m.verify.mockClear()
+    expect(store.locked).toBe(true)
 
-    // Volta depois de 2 min → trava e abre a biometria uma vez.
-    const now = vi.spyOn(Date, 'now')
-    now.mockReturnValue(1_000_000)
-    m.appListeners.appStateChange({ isActive: false } as never)
     let release!: () => void
     m.verify.mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
-    now.mockReturnValue(1_120_000)
-    m.appListeners.appStateChange({ isActive: true } as never)
-    expect(store.locked).toBe(true)
+    const now = vi.spyOn(Date, 'now')
+    now.mockReturnValue(1_000_000)
+    const first = bio.unlock()
 
     // Durante a verificação o Android pausa e retoma o app (inclusive depois de muito tempo).
     m.appListeners.appStateChange({ isActive: false } as never)
     now.mockReturnValue(1_300_000)
     m.appListeners.appStateChange({ isActive: true } as never)
-    const tap = bio.unlock() // toque em "Desbloquear" enquanto já verifica: não abre outra
+    const second = bio.unlock() // segundo toque enquanto já verifica: não abre outra
     release()
-    await tap
+    await Promise.all([first, second])
     await flush()
     expect(m.verify).toHaveBeenCalledTimes(1)
     expect(store.locked).toBe(false)
@@ -328,9 +323,9 @@ describe('biometria', () => {
   it('cancelar não mostra erro; entrar com a senha desliga a biometria', async () => {
     const { m, bio, store } = await load('android')
     localStorage.setItem('bureau.bio', '1')
-    m.verify.mockRejectedValueOnce(new Error('User cancelled'))
     await bio.initBioLock()
-    await flush()
+    m.verify.mockRejectedValueOnce(new Error('User cancelled'))
+    await bio.unlock()
     expect(store.locked).toBe(true)
     expect(store.lockError).toBe('')
 

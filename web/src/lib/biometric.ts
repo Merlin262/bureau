@@ -59,9 +59,13 @@ export function unlockWithPassword() {
   store.authed = false
 }
 
+/**
+ * Só mostra a tela de bloqueio: a biometria abre quando a pessoa toca em "Desbloquear".
+ * Abrir sozinha (na inicialização ou ao voltar) fazia a tela transparente do plugin ficar por cima do app
+ * sem o diálogo aparecer em alguns Android (tela preta) ou reabrir em loop.
+ */
 function lock() {
   store.locked = true
-  unlock()
 }
 
 /** Trava ao abrir e ao voltar depois de 1 min em segundo plano. */
