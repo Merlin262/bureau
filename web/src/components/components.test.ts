@@ -184,5 +184,14 @@ describe('LockScreen', () => {
   it('botão de desbloquear', async () => {
     render(LockScreen)
     await fireEvent.click(screen.getByText('Desbloquear ▸'))
+    await flush()
+    store.lockError = 'Sensor indisponível'
+    await flush()
+    expect(screen.getByText('▲ Sensor indisponível')).toBeTruthy()
+    store.locked = true
+    store.authed = true
+    await fireEvent.click(screen.getByText('Entrar com a senha'))
+    expect(store.locked).toBe(false)
+    expect(store.authed).toBe(false)
   })
 })

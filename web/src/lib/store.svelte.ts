@@ -29,6 +29,8 @@ class Store {
   wol = $state.raw<WolTarget[]>([])
   /** App travado aguardando biometria. */
   locked = $state(false)
+  /** Último erro da biometria (mostrado na tela de bloqueio). */
+  lockError = $state('')
 
   /** Ações em andamento: chave → rótulo (UI otimista). */
   pending = $state<Record<string, string>>({})

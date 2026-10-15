@@ -287,5 +287,66 @@ describe('biometria', () => {
     m.verify.mockRejectedValueOnce(new Error('não'))
     m.appListeners.appStateChange({ isActive: true } as never)
     expect(store.locked).toBe(true)
+    await flush()
+    expect(store.lockError).toBe('não')
+  })
+
+  it('a tela de biometria do Android (pausa/retoma o app) não cria loop', async () => {
+    const { m, bio, store } = await load('android')
+    localStorage.setItem('bureau.bio', '1')
+    await bio.initBioLock()
+    await flush()
+    expect(store.locked).toBe(false)
+    m.verify.mockClear()
+
+    // Volta depois de 2 min → trava e abre a biometria uma vez.
+    const now = vi.spyOn(Date, 'now')
+    now.mockReturnValue(1_000_000)
+    m.appListeners.appStateChange({ isActive: false } as never)
+    let release!: () => void
+    m.verify.mockImplementationOnce(() => new Promise<void>((r) => (release = r)))
+    now.mockReturnValue(1_120_000)
+    m.appListeners.appStateChange({ isActive: true } as never)
+    expect(store.locked).toBe(true)
+
+    // Durante a verificação o Android pausa e retoma o app (inclusive depois de muito tempo).
+    m.appListeners.appStateChange({ isActive: false } as never)
+    now.mockReturnValue(1_300_000)
+    m.appListeners.appStateChange({ isActive: true } as never)
+    const tap = bio.unlock() // toque em "Desbloquear" enquanto já verifica: não abre outra
+    release()
+    await tap
+    await flush()
+    expect(m.verify).toHaveBeenCalledTimes(1)
+    expect(store.locked).toBe(false)
+
+    // O "retomar" que chega depois da verificação não trava de novo.
+    m.appListeners.appStateChange({ isActive: true } as never)
+    expect(store.locked).toBe(false)
+  })
+
+  it('cancelar não mostra erro; entrar com a senha desliga a biometria', async () => {
+    const { m, bio, store } = await load('android')
+    localStorage.setItem('bureau.bio', '1')
+    m.verify.mockRejectedValueOnce(new Error('User cancelled'))
+    await bio.initBioLock()
+    await flush()
+    expect(store.locked).toBe(true)
+    expect(store.lockError).toBe('')
+
+    store.authed = true
+    bio.unlockWithPassword()
+    expect(store.locked).toBe(false)
+    expect(store.authed).toBe(false)
+    expect(bio.bioEnabled()).toBe(false)
+  })
+
+  it('biometria removida do aparelho: não tranca', async () => {
+    const { m, bio, store } = await load('android')
+    localStorage.setItem('bureau.bio', '1')
+    m.bioAvailable.mockResolvedValueOnce({ isAvailable: false })
+    await bio.initBioLock()
+    expect(store.locked).toBe(false)
+    expect(m.verify).not.toHaveBeenCalled()
   })
 })
