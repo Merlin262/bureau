@@ -1,4 +1,4 @@
-import type { AccessEntry, AlertEvent, BlockRule, DeviceSummary, DnsQuery, Me, MetricsSeries, MonitorDef, OkResponse, PushConfig, UnitEntry, UpdateStatus } from './types'
+import type { AccessEntry, AlertEvent, BlockRule, DeviceSummary, DnsQuery, Me, MetricsSeries, MonitorDef, OkResponse, PushConfig, UnitEntry, UpdateStatus, WolState } from './types'
 import { store } from './store.svelte'
 import { conn } from './platform'
 
@@ -50,7 +50,11 @@ export const api = {
   containerLogs: (id: string) => req<{ text: string }>('GET', `/api/containers/${enc(id)}/logs`),
 
   blocking: (enabled: boolean, timer?: number) => req<OkResponse>('POST', '/api/pihole/blocking', { enabled, timer }),
-  wol: (mac: string) => req<OkResponse>('POST', '/api/network/wol', { mac }),
+  wol: (mac: string, name?: string) => req<OkResponse>('POST', '/api/network/wol', { mac, name }),
+  wolState: () => req<WolState>('GET', '/api/network/wol'),
+  wolUpdate: (mac: string, name: string, user: string) => req<OkResponse>('PUT', `/api/network/wol/${enc(mac)}`, { name, user }),
+  wolRemove: (mac: string) => req<OkResponse>('DELETE', `/api/network/wol/${enc(mac)}`),
+  wolPower: (mac: string, action: 'shutdown' | 'restart') => req<OkResponse>('POST', `/api/network/wol/${enc(mac)}/${action}`),
   alias: (mac: string, name: string) => req<OkResponse>('PUT', '/api/network/alias', { mac, name }),
   power: (action: 'reboot' | 'poweroff') => req<OkResponse>('POST', `/api/power/${action}`),
   updateStatus: () => req<UpdateStatus>('GET', '/api/update'),

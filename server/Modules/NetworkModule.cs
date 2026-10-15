@@ -53,6 +53,10 @@ public sealed class NetworkModule
         return true;
     }
 
+    /// <summary>Aparelho atual pelo MAC (com apelido/fabricante), ou null se não está na lista.</summary>
+    public DeviceInfo? Find(string mac) =>
+        _last.FirstOrDefault(d => d.Mac.Equals(mac, StringComparison.OrdinalIgnoreCase)) is { } d ? Decorate(d) : null;
+
     void Publish(DeviceInfo[] raw)
     {
         TrackNew(raw);

@@ -3,14 +3,16 @@
   import Panel from '../components/Panel.svelte'
   import Sq from '../components/Sq.svelte'
   import Modal from '../components/Modal.svelte'
+  import HoldButton from '../components/HoldButton.svelte'
   import { store, act, toast } from '../lib/store.svelte'
   import { api } from '../lib/api'
   import { duration, int } from '../lib/format'
-  import type { BlockState, DeviceInfo, DnsQuery, MonitorDef } from '../lib/types'
+  import type { BlockState, DeviceInfo, DnsQuery, MonitorDef, WolTarget } from '../lib/types'
   import { onDestroy } from 'svelte'
 
   let query = $state('')
   let mac = $state('')
+  let macName = $state('')
   let editing = $state<string | null>(null)
   let draft = $state('')
 
@@ -33,7 +35,55 @@
   const piholeOn = $derived(!!store.pihole?.configured)
   const blockOf = (m: string) => store.blocks.find((b) => b.mac === m.toLowerCase())
 
-  const wake = (m: string, name: string) => act(`wol:${m}`, '', () => api.wol(m), `Sinal de despertar enviado → ${name}`)
+  // ── Wake-on-LAN: endereços salvos e desligar/reiniciar (só para quem já foi ligado pelo pacote mágico) ──
+  const wolOf = (m: string) => store.wol.find((t) => t.mac === m.toLowerCase())
+  const devOf = (m: string) => store.network?.find((d) => d.mac.toLowerCase() === m)
+  const wake = (m: string, name: string, newName?: string) =>
+    act(`wol:${m.toLowerCase()}`, '', () => api.wol(m, newName), `Sinal de despertar enviado → ${name}`)
+  function sendForm(e: SubmitEvent) {
+    e.preventDefault()
+    if (!mac.trim()) return
+    wake(mac.trim(), macName.trim() || mac.trim(), macName.trim() || undefined)
+    mac = ''
+    macName = ''
+  }
+  function power(t: WolTarget, action: 'shutdown' | 'restart') {
+    if (!t.user) return openWol(t)
+    act(`wolp:${t.mac}`, '', () => api.wolPower(t.mac, action))
+  }
+
+  let wolEdit = $state<WolTarget | null>(null)
+  let wName = $state('')
+  let wUser = $state('')
+  let pubKey = $state('')
+  async function openWol(t: WolTarget) {
+    wolEdit = t
+    wName = t.name ?? ''
+    wUser = t.user ?? ''
+    try { pubKey = (await api.wolState()).publicKey ?? '' } catch { pubKey = '' }
+  }
+  async function saveWol() {
+    const t = wolEdit!
+    const r = await api.wolUpdate(t.mac, wName.trim(), wUser.trim())
+    if (r.ok) { wolEdit = null; toast('Salvo', 'ok') } else toast(r.message ?? 'Falha', 'err')
+  }
+  async function removeWol() {
+    const t = wolEdit!
+    wolEdit = null
+    await act(`wolr:${t.mac}`, '', () => api.wolRemove(t.mac))
+  }
+  const setupScript = $derived(
+    [
+      '# PowerShell como Administrador, no PC que vai ser desligado:',
+      'Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0',
+      'Set-Service sshd -StartupType Automatic; Start-Service sshd',
+      `Add-Content -Path "$env:ProgramData\\ssh\\administrators_authorized_keys" -Value '${pubKey}'`,
+      'icacls.exe "$env:ProgramData\\ssh\\administrators_authorized_keys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"',
+    ].join('\n'),
+  )
+  async function copy(text: string) {
+    try { await navigator.clipboard.writeText(text); toast('Copiado', 'ok') } catch { toast('Não foi possível copiar — selecione o texto', 'err') }
+  }
 
   // ── Apelidos ──
   function edit(d: DeviceInfo) {
@@ -169,6 +219,7 @@
 <div class="rows">
   {#each list as d (d.mac)}
     {@const b = blockOf(d.mac)}
+    {@const w = wolOf(d.mac)}
     <div class="row dev" class:alert={b?.active}>
       <Sq state={b?.active ? 'fail' : d.online ? 'on' : 'off'} />
       <div class="info">
@@ -202,9 +253,11 @@
           <button class="btn ghost" onclick={() => openAccess(d)}>Acessos</button>
           <button class="btn ghost" onclick={() => openBlock(d)}>{b ? 'Regras' : 'Bloquear'}</button>
         {/if}
-        {#if !d.online && !d.randomMac}
+        {#if w && d.online}
+          <HoldButton label="Desligar" onconfirm={() => power(w, 'shutdown')} disabled={!!store.pending[`wolp:${w.mac}`]} />
+        {:else if !d.online && (!d.randomMac || w)}
           <button class="btn ghost" title="Wake-on-LAN: liga remotamente um PC desligado (precisa estar ativado na BIOS/placa de rede)"
-            class:busy={!!store.pending[`wol:${d.mac}`]} onclick={() => wake(d.mac, label(d))}>Ligar (WoL)</button>
+            class:busy={!!store.pending[`wol:${d.mac.toLowerCase()}`]} onclick={() => wake(d.mac, label(d))}>Ligar (WoL)</button>
         {/if}
       </div>
     </div>
@@ -217,10 +270,35 @@
 
 <Panel label="LIGAR REMOTAMENTE (WAKE-ON-LAN)" class="wol">
   <p class="dim small wol-help">Envia um "pacote mágico" que liga um computador desligado da rede — útil para PCs ligados por cabo com Wake-on-LAN ativado na BIOS.</p>
-  <form class="wol-form" onsubmit={(e) => { e.preventDefault(); if (mac) wake(mac, mac) }}>
+  {#each store.wol as t (t.mac)}
+    {@const dev = devOf(t.mac)}
+    <div class="wt">
+      <Sq state={store.pending[`wolp:${t.mac}`] || store.pending[`wol:${t.mac}`] ? 'busy' : dev?.online ? 'on' : 'off'} />
+      <div class="info">
+        <div class="name">{t.name ?? dev?.alias ?? dev?.name ?? t.mac}</div>
+        <div class="sub">{t.mac}{dev ? ` · ${dev.ip}` : ''}{t.lastWake ? ` · PACOTE HÁ ${since(t.lastWake).toUpperCase()}` : ''}</div>
+      </div>
+      <div class="actions">
+        {#if dev?.online}
+          {#if t.user}
+            <button class="btn ghost" class:busy={!!store.pending[`wolp:${t.mac}`]} onclick={() => power(t, 'restart')}>Reiniciar</button>
+            <HoldButton label="Desligar" onconfirm={() => power(t, 'shutdown')} disabled={!!store.pending[`wolp:${t.mac}`]} />
+          {:else}
+            <button class="btn ghost" onclick={() => openWol(t)}>Ativar desligar</button>
+          {/if}
+        {:else}
+          <button class="btn" class:busy={!!store.pending[`wol:${t.mac}`]} onclick={() => wake(t.mac, t.name ?? t.mac)}>Ligar</button>
+        {/if}
+        <button class="btn ghost cfg" aria-label="Configurar" title="Nome, usuário do Windows, remover" onclick={() => openWol(t)}>⚙</button>
+      </div>
+    </div>
+  {/each}
+  <form class="wol-form" onsubmit={sendForm}>
     <input class="field" placeholder="AA:BB:CC:DD:EE:FF" bind:value={mac} autocomplete="off" spellcheck="false" />
+    <input class="field" placeholder="Nome (opcional)" maxlength="40" bind:value={macName} />
     <button class="btn" type="submit" disabled={!mac}>Enviar pacote</button>
   </form>
+  <p class="hint mono dim">ENDEREÇOS USADOS FICAM SALVOS AQUI · O BOTÃO DESLIGAR SÓ APARECE PARA ELES</p>
 </Panel>
 
 {#if blocking}
@@ -283,6 +361,30 @@
   </Modal>
 {/if}
 
+{#if wolEdit}
+  <Modal title={`Wake-on-LAN · ${wolEdit.name ?? wolEdit.mac}`} onclose={() => (wolEdit = null)}>
+    <div class="mon-edit wol-edit">
+      <input class="field" placeholder="Nome" maxlength="40" bind:value={wName} />
+      <input class="field" placeholder="Usuário do Windows (ex.: joao)" bind:value={wUser} autocapitalize="off" spellcheck="false" />
+    </div>
+    <p class="dim small">
+      <b>Para desligar/reiniciar pela rede</b>, o BUREAU entra no PC por SSH com uma chave própria (nenhuma senha fica guardada)
+      e roda <code>shutdown</code>. Faça uma vez no PC: abra o <b>PowerShell como Administrador</b>, cole os comandos abaixo e
+      informe acima o usuário do Windows (o que aparece em <code>whoami</code>, depois da barra). A conta precisa ser administradora.
+    </p>
+    {#if pubKey}
+      <pre class="setup mono">{setupScript}</pre>
+      <div class="actions"><button class="btn" onclick={() => copy(setupScript)}>Copiar comandos</button></div>
+    {:else}
+      <p class="empty">Gerando a chave do BUREAU…</p>
+    {/if}
+    <div class="actions modal-actions">
+      <button class="btn on" onclick={saveWol}>Salvar</button>
+      <button class="btn danger" onclick={removeWol}>Remover da lista</button>
+    </div>
+  </Modal>
+{/if}
+
 {#if editingMon}
   <Modal title="Sites e serviços" onclose={() => (editingMon = false)}>
     <p class="dim small">Endereço <code>https://site</code> (testa HTTP) ou <code>host:porta</code> (testa TCP, ex.: <code>192.168.100.1:80</code>). A internet já é monitorada.</p>
@@ -326,8 +428,13 @@
   .track i { display: block; height: 100%; background: var(--fg-dim); }
   .act .mono { font-size: 9.5px; color: var(--fg-mute); }
   .hint { margin-top: 10px; font-size: 10px; }
-  :global(.wol) { margin-top: 24px; max-width: 520px; }
-  .wol-form { display: flex; gap: 8px; }
+  :global(.wol) { margin-top: 24px; max-width: 680px; }
+  .wol-form { display: flex; gap: 8px; margin-top: 12px; }
+  .wol-form input { flex: 1; min-width: 0; }
+  .wt { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .wt .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .cfg { padding: 0 9px; }
+  .setup { white-space: pre-wrap; word-break: break-all; font-size: 11px; line-height: 1.5; padding: 10px; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.02); margin-bottom: 8px; user-select: all; }
   .small { font-size: 13px; margin-bottom: 10px; }
   .opt { display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
   .opt input { position: absolute; opacity: 0; pointer-events: none; }
@@ -368,5 +475,10 @@
     .mon .bars { display: none; }
     .mon-edit { grid-template-columns: 1fr auto; }
     .mon-edit input:first-child { grid-column: 1 / -1; }
+    .wol-edit { grid-template-columns: 1fr; }
+    .wol-form { flex-wrap: wrap; }
+    .wol-form input { flex: 1 1 100%; }
+    .wt { grid-template-columns: 10px minmax(0, 1fr); }
+    .wt .actions { grid-column: 2; justify-content: flex-start; }
   }
 </style>

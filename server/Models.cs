@@ -45,7 +45,11 @@ public sealed record DeviceInfo(string Ip, string Mac, string? Name, string? Ven
 public sealed record LoginRequest(string? Password);
 public sealed record WatchRequest(string[] Units);
 public sealed record BlockingRequest(bool Enabled, int? Timer);
-public sealed record WolRequest(string Mac);
+public sealed record WolRequest(string Mac, string? Name = null);
+/// <summary>Endereço salvo do Wake-on-LAN. User = conta do Windows para desligar/reiniciar por SSH.</summary>
+public sealed record WolTarget(string Mac, string? Name, string? User, long LastWake);
+public sealed record WolTargetUpdate(string? Name, string? User);
+public sealed record WolState(WolTarget[] Targets, string? PublicKey);
 public sealed record AliasRequest(string Mac, string? Name);
 public sealed record UpdateStatus(string Current, string? Latest, string Status, string? Message, long CheckedAt, bool Auto, bool Supported);
 public sealed record OkResponse(bool Ok, string? Message);
@@ -116,6 +120,9 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(WatchRequest))]
 [JsonSerializable(typeof(BlockingRequest))]
 [JsonSerializable(typeof(WolRequest))]
+[JsonSerializable(typeof(WolTarget[]))]
+[JsonSerializable(typeof(WolTargetUpdate))]
+[JsonSerializable(typeof(WolState))]
 [JsonSerializable(typeof(AliasRequest))]
 [JsonSerializable(typeof(UpdateStatus))]
 [JsonSerializable(typeof(Dictionary<string, string>))]

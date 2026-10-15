@@ -1,4 +1,4 @@
-import type { AlertEvent, AptState, BackupInfo, BlockState, HaState, JfState, MonitorState, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot } from './types'
+import type { AlertEvent, AptState, BackupInfo, BlockState, HaState, JfState, MonitorState, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot, WolTarget } from './types'
 import { sfx } from './sfx'
 import { openStream } from './sse'
 import { conn, isNative, tap } from './platform'
@@ -26,6 +26,7 @@ class Store {
   jellyfin = $state.raw<JfState | null>(null)
   monitors = $state.raw<MonitorState[] | null>(null)
   blocks = $state.raw<BlockState[]>([])
+  wol = $state.raw<WolTarget[]>([])
   /** App travado aguardando biometria. */
   locked = $state(false)
 
@@ -75,6 +76,7 @@ const handlers: Record<string, (v: never) => void> = {
   jellyfin: (v: JfState) => (store.jellyfin = v),
   monitors: (v: MonitorState[]) => (store.monitors = v),
   blocks: (v: BlockState[]) => (store.blocks = v),
+  wol: (v: WolTarget[]) => (store.wol = v),
   alerts: (v: AlertEvent[]) => {
     // Alerta novo enquanto a interface está aberta → aviso na tela também.
     const fresh = v.filter((a) => a.ts > lastAlertTs)

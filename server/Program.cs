@@ -67,6 +67,7 @@ builder.Services.AddSingleton<ServicesModule>();
 builder.Services.AddSingleton<DockerModule>();
 builder.Services.AddSingleton<PiHoleModule>();
 builder.Services.AddSingleton<NetworkModule>();
+builder.Services.AddSingleton<WakeTargets>();
 builder.Services.AddSingleton<DeviceTokens>();
 builder.Services.AddSingleton<AccessLog>();
 builder.Services.AddSingleton<MonitorsModule>();
@@ -89,6 +90,7 @@ builder.Services.AddHostedService<SystemMonitor>();
 builder.Services.AddHostedService<Collectors>();
 
 var app = builder.Build();
+app.Services.GetRequiredService<WakeTargets>(); // publica a lista do Wake-on-LAN no stream desde o início
 
 if (string.IsNullOrEmpty(opts.PasswordHash) && !app.Environment.IsDevelopment())
     app.Logger.LogWarning("Nenhuma senha definida. Rode: sudo /opt/bureau/bureau set-password");

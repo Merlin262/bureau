@@ -14,7 +14,7 @@ public sealed class ConfigBackup(IOptions<BureauOptions> o, IHostApplicationLife
 {
     static readonly string[] Files =
     [
-        "watch.json", "aliases.json", "monitors.json", "blocks.json", "known-devices.json", "backups.json",
+        "watch.json", "aliases.json", "monitors.json", "blocks.json", "wol.json", "known-devices.json", "backups.json",
         "alerts.json", "push.json", "tokens.json", "vapid.json", "access.json",
     ];
 

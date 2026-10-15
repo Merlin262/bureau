@@ -195,10 +195,12 @@ public static class Api
             TypedResults.Ok(await p.SetBlockingAsync(req.Enabled, req.Timer)));
 
         // ── Rede ────────────────────────────────────────────
-        api.MapPost("/network/wol", async (WolRequest req) =>
-            TypedResults.Ok(await NetworkModule.WakeAsync(req.Mac)
-                ? new OkResponse(true, "Pacote mágico enviado")
-                : new OkResponse(false, "MAC inválido")));
+        api.MapPost("/network/wol", async (WolRequest req, WakeTargets w) => TypedResults.Ok(await w.WakeAsync(req.Mac, req.Name)));
+        api.MapGet("/network/wol", async (WakeTargets w) => TypedResults.Ok(await w.StateAsync()));
+        api.MapPut("/network/wol/{mac}", (string mac, WolTargetUpdate req, WakeTargets w) => TypedResults.Ok(w.Update(mac, req)));
+        api.MapDelete("/network/wol/{mac}", (string mac, WakeTargets w) => TypedResults.Ok(w.Remove(mac)));
+        api.MapPost("/network/wol/{mac}/{action}", async (string mac, string action, WakeTargets w) =>
+            TypedResults.Ok(await w.PowerAsync(mac, action)));
 
         api.MapPut("/network/alias", (AliasRequest req, NetworkModule net) =>
             TypedResults.Ok(net.SetAlias(req.Mac, req.Name) ? new OkResponse(true, null) : new OkResponse(false, "MAC inválido")));
