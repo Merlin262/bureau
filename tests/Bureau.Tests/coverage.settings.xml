@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cobertura medida só no código do BUREAU (não nos testes nem nas bibliotecas). -->
+<Configuration>
+  <CodeCoverage>
+    <ModulePaths>
+      <Include>
+        <ModulePath>.*bureau\.dll$</ModulePath>
+      </Include>
+    </ModulePaths>
+    <Sources>
+      <Exclude>
+        <Source>.*[\\/]obj[\\/].*</Source>
+      </Exclude>
+    </Sources>
+    <Attributes>
+      <Exclude>
+        <Attribute>^System\.Diagnostics\.CodeAnalysis\.ExcludeFromCodeCoverageAttribute$</Attribute>
+        <Attribute>^System\.CodeDom\.Compiler\.GeneratedCodeAttribute$</Attribute>
+      </Exclude>
+    </Attributes>
+    <EnableStaticNativeInstrumentation>False</EnableStaticNativeInstrumentation>
+    <EnableDynamicNativeInstrumentation>False</EnableDynamicNativeInstrumentation>
+  </CodeCoverage>
+</Configuration>

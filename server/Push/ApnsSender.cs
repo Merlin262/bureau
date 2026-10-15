@@ -32,20 +32,27 @@ public sealed class ApnsSender(IOptionsMonitor<BureauOptions> opts, ILogger<Apns
 
     ApnsOptions O => opts.CurrentValue.Push.Apns;
 
+    /// <summary>Endereços dos dois ambientes (substituídos nos testes).</summary>
+    internal string ProductionUrl { get; set; } = Production;
+    internal string SandboxUrl { get; set; } = Sandbox;
+
     public bool Configured => !string.IsNullOrWhiteSpace(O.KeyId) && !string.IsNullOrWhiteSpace(O.TeamId) && LoadKey() is not null;
 
     public async Task<PushResult> SendAsync(PushDevice d, AlertEvent a, CancellationToken ct = default)
     {
         if (d.Token is null || !Configured) return PushResult.Failed;
         var body = Payload(a);
-        string[] hosts = O.Sandbox ? [Sandbox, Production] : [Production, Sandbox];
+        string[] hosts = O.Sandbox ? [SandboxUrl, ProductionUrl] : [ProductionUrl, SandboxUrl];
         var badToken = 0;
 
         foreach (var host in hosts)
         {
+            // O APNs só aceita HTTP/2. A versão padrão do HttpClient não vale para um HttpRequestMessage próprio.
             using var req = new HttpRequestMessage(HttpMethod.Post, $"{host}/3/device/{d.Token}")
             {
                 Content = new ByteArrayContent(body),
+                Version = HttpVersion.Version20,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact,
             };
             req.Headers.TryAddWithoutValidation("authorization", $"bearer {Jwt()}");
             req.Headers.TryAddWithoutValidation("apns-topic", O.BundleId);

@@ -33,7 +33,7 @@ public sealed partial class PiHoleModule
         }).Where(q => clientFilter is null || q.Client == clientFilter)];
     }
 
-    static bool IsBlocked(string status) =>
+    internal static bool IsBlocked(string status) =>
         status.Contains("GRAVITY") || status.Contains("REGEX") || status.Contains("DENYLIST") || status.Contains("BLOCKED") || status == "SPECIAL_DOMAIN";
 
     // ── Bloquear / liberar domínio ───────────────────────

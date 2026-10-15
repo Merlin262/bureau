@@ -118,6 +118,7 @@ public static class Cli
         return 0;
     }
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage] // lê o teclado
     static string ReadSecret(string prompt)
     {
         Console.Write(prompt);

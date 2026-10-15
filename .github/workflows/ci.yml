@@ -4,10 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_call: # usado pela release: só publica se os testes passarem
 
 jobs:
-  build:
+  interface:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,13 +19,50 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+      - name: Tipos
+        run: npm run check
+      - name: Testes (Vitest) com cobertura
+        run: npm run test:coverage
+      - name: Resumo da cobertura
+        if: always()
+        run: |
+          [ -f coverage/cobertura-coverage.xml ] && \
+            python3 ../scripts/coverage-summary.py coverage/cobertura-coverage.xml --title Interface >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Build (servidor e app)
+        run: npm run build && npm run build:app
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cobertura-interface
+          path: web/coverage
+          if-no-files-found: ignore
+
+  servidor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      - name: Interface
-        working-directory: web
-        run: npm ci && npm run check && npm run build && npm run build:app
-
-      - name: Backend
+      - name: Build
         run: dotnet build server/Bureau.csproj -c Release -warnaserror
+
+      - name: Testes (xUnit) com cobertura
+        run: >
+          dotnet test --project tests/Bureau.Tests -c Release
+          --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
+          --coverage-settings tests/Bureau.Tests/coverage.settings.xml
+          --results-directory TestResults
+
+      - name: Resumo e mínimo de cobertura
+        run: python3 scripts/coverage-summary.py TestResults/coverage.cobertura.xml --title Servidor --min 75 >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: testes-servidor
+          path: TestResults
+          if-no-files-found: ignore

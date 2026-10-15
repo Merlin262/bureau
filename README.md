@@ -144,6 +144,19 @@ Build de produção para Linux (requer `clang` e `zlib1g-dev` para o Native AOT)
 ./build.sh && sudo ./install.sh --local dist/linux-x64
 ```
 
+### Testes
+
+```bash
+dotnet test --project tests/Bureau.Tests   # servidor: xUnit (módulos, push, API inteira em memória)
+cd web && npm test                         # interface: Vitest + Testing Library (telas, stream, app nativo)
+```
+
+Com cobertura: `npm run test:coverage` (relatório em `web/coverage/`) e, no servidor,
+`dotnet test --project tests/Bureau.Tests --coverage --coverage-output-format cobertura --coverage-settings tests/Bureau.Tests/coverage.settings.xml`.
+Integrações externas (Pi-hole, Home Assistant, Jellyfin, Firebase, APNs, ntfy) são testadas contra servidores HTTP locais
+simulados — nada sai para a internet além do monitor "Internet". A pipeline roda tudo a cada push, mostra a cobertura no
+resumo do GitHub Actions e **bloqueia a release** se algum teste falhar.
+
 ### Estrutura
 
 ```
@@ -157,8 +170,9 @@ web/                     Frontend Svelte 5 + Vite → server/wwwroot (web) e dis
 docs/app-mobile.md       App mobile, push e como compilar
   src/lib/store.svelte.ts  Estado global alimentado pelo SSE
   src/views/             Telas · src/components/ peças da interface
+tests/Bureau.Tests/       Testes do servidor (xUnit) · os da interface ficam ao lado do código (*.test.ts)
 install.sh / uninstall.sh / build.sh
-.github/workflows/       CI e release (binários x64 e ARM64)
+.github/workflows/       CI (testes + cobertura) e release (binários x64 e ARM64)
 ```
 
 ### Adicionando um módulo

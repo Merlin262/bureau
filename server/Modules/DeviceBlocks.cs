@@ -14,6 +14,7 @@ public sealed class DeviceBlocks
     readonly PiHoleModule _pihole;
     readonly string _path;
     readonly Lock _lock = new();
+    readonly SemaphoreSlim _apply = new(1, 1); // Upsert/Remove aplicam em paralelo ao coletor
     List<BlockRule> _rules;
     readonly Dictionary<string, bool> _applied = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, string?> _errors = new(StringComparer.OrdinalIgnoreCase);
@@ -74,6 +75,13 @@ public sealed class DeviceBlocks
     }
 
     public async Task ApplyAsync(CancellationToken ct = default)
+    {
+        await _apply.WaitAsync(ct);
+        try { await ApplyCoreAsync(); }
+        finally { _apply.Release(); }
+    }
+
+    async Task ApplyCoreAsync()
     {
         BlockRule[] rules;
         lock (_lock) rules = [.. _rules];

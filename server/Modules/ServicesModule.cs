@@ -70,15 +70,18 @@ public sealed partial class ServicesModule(EventHub hub, WatchStore watch, Alert
     {
         if (!OperatingSystem.IsLinux()) return DevFakes.AvailableUnits();
         var r = await Proc.RunAsync("systemctl", ["list-units", "--type=service", "--all", "--plain", "--no-legend", "--no-pager"]);
-        return r.Out.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        return ParseUnits(r.Out);
+    }
+
+    internal static UnitEntry[] ParseUnits(string output) =>
+        output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => UnitLine().Match(l.TrimStart('●', ' ')))
             .Where(m => m.Success)
             .Select(m => new UnitEntry(m.Groups[1].Value, m.Groups[5].Value.Trim(), m.Groups[3].Value))
             .OrderBy(u => u.Unit)
             .ToArray();
-    }
 
-    static ServiceInfo[] Parse(string output)
+    internal static ServiceInfo[] Parse(string output)
     {
         var list = new List<ServiceInfo>();
         foreach (var block in output.Replace("\r", "").Split("\n\n", StringSplitOptions.RemoveEmptyEntries))

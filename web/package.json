@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "icons": "node scripts/icons.mjs",
     "build:app": "vite build --mode app",
     "android:sync": "vite build --mode app && cap sync android",
@@ -20,11 +22,16 @@
     "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@testing-library/svelte": "^5.4.2",
+    "@testing-library/user-event": "^14.6.8",
     "@tsconfig/svelte": "^5.0.8",
+    "@vitest/coverage-v8": "^5.0.5",
+    "jsdom": "^29.1.1",
     "svelte": "^5.57.2",
     "svelte-check": "^4.7.6",
     "typescript": "^5.9.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.2",

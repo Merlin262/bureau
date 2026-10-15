@@ -38,8 +38,12 @@ public sealed class AlertEngine
     bool _outage, _lowBattery, _hot, _piDown;
     int _piFailures;
 
-    public AlertEngine(EventHub hub, Notifier notifier, IOptionsMonitor<BureauOptions> opts, ILogger<AlertEngine> log)
+    readonly TimeProvider _time;
+
+    public AlertEngine(EventHub hub, Notifier notifier, IOptionsMonitor<BureauOptions> opts, ILogger<AlertEngine> log,
+        TimeProvider? time = null)
     {
+        _time = time ?? TimeProvider.System;
         _hub = hub;
         _notifier = notifier;
         _opts = opts;
@@ -51,10 +55,12 @@ public sealed class AlertEngine
 
     AlertOptions O => _opts.CurrentValue.Alerts;
 
-    /// <summary>Marca uma mudança como intencional (ação feita pela interface) para não gerar alerta.</summary>
-    public void Expect(string key, TimeSpan? window = null) => _expected[key] = DateTime.UtcNow + (window ?? TimeSpan.FromSeconds(90));
+    DateTime Now => _time.GetUtcNow().UtcDateTime;
 
-    bool IsExpected(string key) => _expected.TryGetValue(key, out var until) && until > DateTime.UtcNow;
+    /// <summary>Marca uma mudança como intencional (ação feita pela interface) para não gerar alerta.</summary>
+    public void Expect(string key, TimeSpan? window = null) => _expected[key] = Now + (window ?? TimeSpan.FromSeconds(90));
+
+    bool IsExpected(string key) => _expected.TryGetValue(key, out var until) && until > Now;
 
     // ── Serviços ─────────────────────────────────────────
     public void OnServices(ServiceInfo[] items)
@@ -102,7 +108,7 @@ public sealed class AlertEngine
     // ── Energia e temperatura (a cada segundo) ───────────
     public void OnSystem(SystemSnapshot s)
     {
-        var now = DateTime.UtcNow;
+        var now = Now;
         lock (_lock)
         {
             if (s.Battery is { } b)
@@ -195,7 +201,7 @@ public sealed class AlertEngine
     {
         lock (_lock)
         {
-            var key = $"sim:{kind}:{DateTime.UtcNow.Ticks}";
+            var key = $"sim:{kind}:{Now.Ticks}";
             switch (kind)
             {
                 case "power": Raise(key, "power", "crit", "Queda de energia", "O servidor está funcionando na bateria (87%).", "painel"); break;
@@ -312,7 +318,7 @@ public sealed class AlertEngine
 
     void Raise(string key, string kind, string level, string title, string body, string view)
     {
-        var now = DateTime.UtcNow;
+        var now = Now;
         if (_lastSent.TryGetValue(key, out var last) && now - last < Cooldown) return;
         _lastSent[key] = now;
 

@@ -68,7 +68,7 @@ public sealed partial class MonitorsModule
         return new(true, "Monitores salvos");
     }
 
-    static bool IsValidTarget(string t) =>
+    internal static bool IsValidTarget(string t) =>
         (Uri.TryCreate(t, UriKind.Absolute, out var u) && u.Scheme is "http" or "https") || HostPort().IsMatch(t);
 
     public async Task RunAsync(CancellationToken ct = default)

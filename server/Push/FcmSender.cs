@@ -24,12 +24,15 @@ public sealed class FcmSender(IOptionsMonitor<BureauOptions> opts, ILogger<FcmSe
 
     public bool Configured => LoadAccount() is not null;
 
+    /// <summary>Endereço da API (substituído nos testes).</summary>
+    internal string BaseUrl { get; set; } = "https://fcm.googleapis.com";
+
     public async Task<PushResult> SendAsync(PushDevice d, AlertEvent a, CancellationToken ct = default)
     {
         if (LoadAccount() is not { } acc || d.Token is null) return PushResult.Failed;
         var token = await AccessTokenAsync(acc, ct);
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"https://fcm.googleapis.com/v1/projects/{acc.ProjectId}/messages:send")
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/v1/projects/{acc.ProjectId}/messages:send")
         {
             Content = new StringContent(Message(d.Token, a), Encoding.UTF8, "application/json"),
         };

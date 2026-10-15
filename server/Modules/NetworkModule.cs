@@ -57,7 +57,7 @@ public sealed class NetworkModule
     public DeviceInfo? Find(string mac) =>
         _last.FirstOrDefault(d => d.Mac.Equals(mac, StringComparison.OrdinalIgnoreCase)) is { } d ? Decorate(d) : null;
 
-    void Publish(DeviceInfo[] raw)
+    internal void Publish(DeviceInfo[] raw)
     {
         TrackNew(raw);
         _last = raw;
@@ -163,7 +163,7 @@ public sealed class NetworkModule
     }
 
     /// <summary>Sub-redes IPv4 das placas de rede físicas (Wi-Fi/cabo) — exclui docker0, br-*, veth*, tailscale0…</summary>
-    static List<(uint Net, uint Mask)> LanNetworks()
+    internal static List<(uint Net, uint Mask)> LanNetworks()
     {
         var nets = new List<(uint, uint)>();
         foreach (var nic in System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces())
@@ -180,27 +180,34 @@ public sealed class NetworkModule
         return nets;
     }
 
-    static bool InLan(string ip, List<(uint Net, uint Mask)> lan)
+    internal static bool InLan(string ip, List<(uint Net, uint Mask)> lan)
     {
         if (lan.Count == 0) return true; // sem informação: não filtra
         var k = IpKey(ip);
         return k != uint.MaxValue && lan.Any(n => (k & n.Mask) == n.Net);
     }
 
-    static uint IpKey(string ip) =>
+    internal static uint IpKey(string ip) =>
         IPAddress.TryParse(ip, out var a) && a.AddressFamily == AddressFamily.InterNetwork
             ? System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(a.GetAddressBytes())
             : uint.MaxValue;
 
-    public static async Task<bool> WakeAsync(string mac)
+    /// <summary>"Pacote mágico": 6 bytes 0xFF seguidos do MAC repetido 16 vezes (null se o MAC for inválido).</summary>
+    internal static byte[]? MagicPacket(string? mac)
     {
         var hex = (mac ?? "").Replace(":", "").Replace("-", "").Trim();
-        if (hex.Length != 12 || !hex.All(Uri.IsHexDigit)) return false;
+        if (hex.Length != 12 || !hex.All(Uri.IsHexDigit)) return null;
         var m = Convert.FromHexString(hex);
 
         var packet = new byte[6 + 16 * 6];
         Array.Fill(packet, (byte)0xFF, 0, 6);
         for (var i = 0; i < 16; i++) m.CopyTo(packet, 6 + i * 6);
+        return packet;
+    }
+
+    public static async Task<bool> WakeAsync(string mac)
+    {
+        if (MagicPacket(mac) is not { } packet) return false;
 
         // Envia para o broadcast geral e para o broadcast de cada sub-rede (alguns roteadores só repassam este),
         // nas portas 9 e 7 — as duas usadas por placas de rede para o "pacote mágico".

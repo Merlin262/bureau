@@ -29,7 +29,7 @@ public sealed class WakeTargets
         Publish();
     }
 
-    static string? NormalizeMac(string? mac)
+    internal static string? NormalizeMac(string? mac)
     {
         var hex = (mac ?? "").Replace(":", "").Replace("-", "").Replace(".", "").Trim();
         if (hex.Length != 12 || !hex.All(Uri.IsHexDigit)) return null;

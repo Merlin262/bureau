@@ -1,9 +1,12 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Bureau.Modules;
 
 /// <summary>
 /// Dados simulados usados quando o backend roda fora do Linux (desenvolvimento no Windows/macOS),
 /// para que a interface possa ser desenvolvida sem um servidor real.
 /// </summary>
+[ExcludeFromCodeCoverage]
 public static class DevFakes
 {
     static readonly Dictionary<string, string> ServiceStates = new()
@@ -144,6 +147,7 @@ public static class DevFakes
     ];
 }
 
+[ExcludeFromCodeCoverage]
 public sealed class FakeProbe : ISystemProbe
 {
     double _cpu = 18, _mem = 0.42, _rx = 120_000, _tx = 40_000, _bat = 87;

@@ -99,7 +99,7 @@ public sealed partial class DockerModule : IDisposable
         return Ansi().Replace(Demux(bytes), "");
     }
 
-    static ContainerInfo ParseContainer(JsonElement c)
+    internal static ContainerInfo ParseContainer(JsonElement c)
     {
         var name = c.GetProperty("Names").EnumerateArray().FirstOrDefault().GetString()?.TrimStart('/') ?? "?";
         var ports = new SortedSet<string>();
@@ -117,7 +117,7 @@ public sealed partial class DockerModule : IDisposable
     }
 
     /// <summary>Logs sem TTY vêm multiplexados: cabeçalho de 8 bytes [stream,0,0,0,len(4 BE)] por bloco.</summary>
-    static string Demux(byte[] b)
+    internal static string Demux(byte[] b)
     {
         if (b.Length < 8 || b[0] > 2 || b[1] != 0 || b[2] != 0 || b[3] != 0) return Encoding.UTF8.GetString(b);
         var sb = new StringBuilder(b.Length);

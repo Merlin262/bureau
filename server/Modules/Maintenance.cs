@@ -52,16 +52,7 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
     async Task ListAsync(CancellationToken ct)
     {
         var r = await Proc.RunAsync("apt", ["list", "--upgradable"], 60_000, ct);
-        var names = new List<string>();
-        var security = 0;
-        foreach (var line in r.Out.Split('\n'))
-        {
-            var slash = line.IndexOf('/');
-            if (slash <= 0 || !line.Contains("upgradable")) continue;
-            names.Add(line[..slash]);
-            var space = line.IndexOf(' ', slash);
-            if (space > slash && line[slash..space].Contains("-security")) security++;
-        }
+        var (names, security) = ParseUpgradable(r.Out);
         // Atualizações em liberação gradual do Ubuntu ("phased"): o apt as segura de propósito.
         var phased = await PhasedAsync(names, ct);
         _packages = [.. names.Where(n => !phased.Contains(n)).Order()];
@@ -70,18 +61,38 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
         _checkedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     }
 
-    /// <summary>Simulação (não precisa de root): lista o bloco "deferred due to phasing".</summary>
+    /// <summary>Saída do "apt list --upgradable": nomes dos pacotes e quantos vêm do repositório de segurança.</summary>
+    internal static (List<string> Names, int Security) ParseUpgradable(string output)
+    {
+        var names = new List<string>();
+        var security = 0;
+        foreach (var line in output.Split('\n'))
+        {
+            var slash = line.IndexOf('/');
+            if (slash <= 0 || !line.Contains("upgradable")) continue;
+            names.Add(line[..slash]);
+            var space = line.IndexOf(' ', slash);
+            if (space > slash && line[slash..space].Contains("-security")) security++;
+        }
+        return (names, security);
+    }
+
     /// <summary>
     /// Pacotes em liberação gradual: o "apt-cache policy" marca a versão nova com "(phased N%)".
     /// Não depende do texto de saída do apt-get (que muda entre versões do apt).
     /// </summary>
     static async Task<HashSet<string>> PhasedAsync(IReadOnlyCollection<string> packages, CancellationToken ct)
     {
-        var set = new HashSet<string>();
-        if (packages.Count == 0) return set;
+        if (packages.Count == 0) return [];
         var r = await Proc.RunAsync("apt-cache", ["policy", .. packages], 60_000, ct);
+        return ParsePhased(r.Out);
+    }
+
+    internal static HashSet<string> ParsePhased(string output)
+    {
+        var set = new HashSet<string>();
         string? current = null;
-        foreach (var line in r.Out.Split('\n'))
+        foreach (var line in output.Split('\n'))
         {
             if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line.EndsWith(':')) current = line[..^1].Split(':')[0];
             else if (current is not null && line.Contains("(phased")) set.Add(current);

@@ -11,3 +11,5 @@ server/.data/
 .DS_Store
 dist-app/
 .claude/
+TestResults/
+web/coverage/

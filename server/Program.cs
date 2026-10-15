@@ -110,3 +110,6 @@ app.UseStaticWeb();
 app.Logger.LogInformation("BUREAU online na porta {Port}", opts.Port);
 app.Run();
 return 0;
+
+/// <summary>Visível para os testes de integração (WebApplicationFactory).</summary>
+public partial class Program;

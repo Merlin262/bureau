@@ -124,7 +124,7 @@ export function toast(text: string, kind: Toast['kind'] = 'info') {
   const id = ++toastId
   store.toasts = [...store.toasts, { id, kind, text }]
   if (kind === 'err') sfx.error()
-  setTimeout(() => (store.toasts = store.toasts.filter((t) => t.id !== id)), kind === 'err' ? 6000 : 3200)
+  setTimeout(() => { store.toasts = store.toasts.filter((t) => t.id !== id) }, kind === 'err' ? 6000 : 3200)
 }
 
 export async function act(key: string, label: string, fn: () => Promise<OkResponse>, okText?: string) {
