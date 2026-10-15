@@ -98,6 +98,17 @@ fi
 [[ -f "$PREFIX/update.sh" ]] && chmod 755 "$PREFIX/update.sh"
 ok "Binário $VERSION instalado em $PREFIX"
 
+# ── 1b. Notebook como servidor: nunca suspender ──────────────
+# Por padrão, fechar a tampa suspende o notebook (e ele some da rede).
+if ls /sys/class/power_supply/*/type 2>/dev/null | xargs -r cat 2>/dev/null | grep -q Battery; then
+  install -d /etc/systemd/logind.conf.d
+  printf '[Login]\nHandleLidSwitch=ignore\nHandleLidSwitchExternalPower=ignore\nHandleLidSwitchDocked=ignore\nIdleAction=ignore\n' \
+    >/etc/systemd/logind.conf.d/50-bureau-servidor.conf
+  systemctl kill -s HUP systemd-logind 2>/dev/null || true
+  systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target >/dev/null 2>&1 || true
+  ok "Notebook: fechar a tampa não suspende mais; suspensão desativada"
+fi
+
 # ── 2. Usuário de serviço ─────────────────────────────────────
 if ! id "$SVC_USER" &>/dev/null; then
   useradd --system --home-dir "$DATA_DIR" --no-create-home --shell /usr/sbin/nologin "$SVC_USER"
