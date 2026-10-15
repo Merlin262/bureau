@@ -53,7 +53,10 @@ jobs:
       - name: Testes (xUnit) com cobertura
         run: |
           set -o pipefail
-          dotnet test --project tests/Bureau.Tests -c Release             --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml             --coverage-settings tests/Bureau.Tests/coverage.settings.xml             --results-directory TestResults 2>&1 | tee test.log
+          dotnet test --project tests/Bureau.Tests -c Release \
+            --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml \
+            --coverage-settings tests/Bureau.Tests/coverage.settings.xml \
+            --results-directory TestResults 2>&1 | tee test.log
 
       - name: Testes que falharam
         if: failure()
@@ -62,8 +65,7 @@ jobs:
           awk '/^failed /{p=1; n=0} p{print; if(++n>=14){p=0; print "---"}}' test.log > failed.txt || true
           { echo '### Testes que falharam'; echo '```'; cat failed.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           grep '^failed ' test.log | while read -r line; do
-            msg=$(grep -A8 -F "$line" test.log | tr '
-' ' ' | cut -c1-900)
+            msg=$(grep -A8 -F "$line" test.log | tr '\n' ' ' | cut -c1-900)
             echo "::error title=Teste falhou::$msg"
           done
 
