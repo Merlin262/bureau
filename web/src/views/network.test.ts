@@ -276,6 +276,8 @@ describe('Rede · Wake-on-LAN', () => {
     // Com usuário: reiniciar e desligar (segurando).
     store.wol = [{ mac: '30:56:0f:86:a7:dd', name: 'MerlinPC', user: 'joao', lastWake: 0 }]
     await flush()
+    // Mesmo parecendo ligado (cache ARP), "Ligar" continua disponível.
+    expect(within(container.querySelector('.wt') as HTMLElement).getByText('Ligar')).toBeTruthy()
     await fireEvent.click(within(container.querySelector('.wt') as HTMLElement).getByText('Reiniciar'))
     await hold(within(container.querySelector('.wt') as HTMLElement).getByRole('button', { name: 'Desligar' }))
     await flush()

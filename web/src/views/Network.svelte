@@ -285,6 +285,9 @@
         <div class="sub">{t.mac}{dev ? ` · ${dev.ip}` : ''}{t.lastWake ? ` · PACOTE HÁ ${since(t.lastWake).toUpperCase()}` : ''}</div>
       </div>
       <div class="actions">
+        <!-- "Ligar" sempre: o servidor leva alguns minutos para perceber que o PC desligou (cache ARP),
+             e um pacote mágico para um PC já ligado não faz nada. -->
+        <button class="btn" class:ghost={dev?.online} class:busy={!!store.pending[`wol:${t.mac}`]} onclick={() => wake(t.mac, t.name ?? t.mac)}>Ligar</button>
         {#if dev?.online}
           {#if t.user}
             <button class="btn ghost" class:busy={!!store.pending[`wolp:${t.mac}`]} onclick={() => power(t, 'restart')}>Reiniciar</button>
@@ -292,8 +295,6 @@
           {:else}
             <button class="btn ghost" onclick={() => openWol(t)}>Ativar desligar</button>
           {/if}
-        {:else}
-          <button class="btn" class:busy={!!store.pending[`wol:${t.mac}`]} onclick={() => wake(t.mac, t.name ?? t.mac)}>Ligar</button>
         {/if}
         <button class="btn ghost cfg" aria-label="Configurar" title="Nome, usuário do Windows, remover" onclick={() => openWol(t)}>⚙</button>
       </div>
