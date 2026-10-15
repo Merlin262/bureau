@@ -257,7 +257,9 @@ describe('Rede · Wake-on-LAN', () => {
     await fireEvent.click(btn('Ativar desligar'))
     await flush()
     let dlg = screen.getByRole('dialog')
-    expect(dlg.textContent).toContain("Add-Content -Path \"$env:ProgramData\\ssh\\administrators_authorized_keys\" -Value 'ssh-ed25519 AAAA bureau@srv'")
+    expect(dlg.textContent).toContain("Add-Content -Path $f -Value 'ssh-ed25519 AAAA bureau@srv'")
+    expect(dlg.textContent).toContain('$f = "$env:ProgramData\\ssh\\administrators_authorized_keys"')
+    expect(dlg.textContent).toContain('Start-Process powershell -Verb RunAs') // abre sozinho como Administrador
     await fireEvent.click(within(dlg).getByText('Copiar comandos'))
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Add-WindowsCapability'))
     await fireEvent.input(within(dlg).getByPlaceholderText('Usuário do Windows (ex.: joao)'), { target: { value: ' joao ' } })

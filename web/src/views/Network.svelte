@@ -72,13 +72,19 @@
     wolEdit = null
     await act(`wolr:${t.mac}`, '', () => api.wolRemove(t.mac))
   }
+  // Cole num PowerShell comum: ele mesmo abre uma janela de Administrador (aviso do Windows) e roda tudo lá.
   const setupScript = $derived(
     [
-      '# PowerShell como Administrador, no PC que vai ser desligado:',
-      'Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0',
+      "$cmd = @'",
+      'Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null',
       'Set-Service sshd -StartupType Automatic; Start-Service sshd',
-      `Add-Content -Path "$env:ProgramData\\ssh\\administrators_authorized_keys" -Value '${pubKey}'`,
-      'icacls.exe "$env:ProgramData\\ssh\\administrators_authorized_keys" /inheritance:r /grant "*S-1-5-32-544:F" /grant "*S-1-5-18:F"',
+      "if (-not (Get-NetFirewallRule -Name OpenSSH-Server-In-TCP -ErrorAction SilentlyContinue)) { New-NetFirewallRule -Name OpenSSH-Server-In-TCP -DisplayName 'OpenSSH Server' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 -Profile Private,Domain | Out-Null }",
+      '$f = "$env:ProgramData\\ssh\\administrators_authorized_keys"',
+      `Add-Content -Path $f -Value '${pubKey}'`,
+      "icacls.exe $f /inheritance:r /grant '*S-1-5-32-544:F' /grant '*S-1-5-18:F' | Out-Null",
+      "Write-Host 'OK: o BUREAU pode desligar este PC.' -ForegroundColor Green; Read-Host 'Enter para fechar'",
+      "'@",
+      "Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-EncodedCommand', [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))",
     ].join('\n'),
   )
   async function copy(text: string) {
@@ -369,7 +375,7 @@
     </div>
     <p class="dim small">
       <b>Para desligar/reiniciar pela rede</b>, o BUREAU entra no PC por SSH com uma chave própria (nenhuma senha fica guardada)
-      e roda <code>shutdown</code>. Faça uma vez no PC: abra o <b>PowerShell como Administrador</b>, cole os comandos abaixo e
+      e roda <code>shutdown</code>. Faça uma vez no PC: abra o <b>PowerShell</b>, cole os comandos abaixo (eles pedem permissão de Administrador) e
       informe acima o usuário do Windows (o que aparece em <code>whoami</code>, depois da barra). A conta precisa ser administradora.
     </p>
     {#if pubKey}
