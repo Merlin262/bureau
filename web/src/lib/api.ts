@@ -1,4 +1,4 @@
-import type { AccessEntry, AlertEvent, BlockRule, DeviceSummary, DnsQuery, Me, MetricsSeries, MonitorDef, OkResponse, PushConfig, UnitEntry, UpdateStatus, WolState } from './types'
+import type { AccessEntry, AlertEvent, BlockRule, DeviceSummary, DnsQuery, Me, MetricsSeries, MonitorDef, OkResponse, PushConfig, UnitEntry, UpdateStatus, WolState, DohState } from './types'
 import { store } from './store.svelte'
 import { conn } from './platform'
 
@@ -67,7 +67,10 @@ export const api = {
   haToggle: (entityId: string) => req<OkResponse>('POST', '/api/homeassistant/toggle', { entityId }),
   monitors: () => req<MonitorDef[]>('GET', '/api/monitors'),
   saveMonitors: (defs: MonitorDef[]) => req<OkResponse>('PUT', '/api/monitors', defs),
-  queries: (client?: string) => req<DnsQuery[]>('GET', `/api/pihole/queries${client ? `?client=${enc(client)}` : ''}`),
+  queries: (client?: string, hours?: number) =>
+    req<DnsQuery[]>('GET', `/api/pihole/queries${client ? `?client=${enc(client)}${hours ? `&hours=${hours}` : ''}` : ''}`),
+  doh: () => req<DohState>('GET', '/api/pihole/doh'),
+  setDoh: (enabled: boolean) => req<OkResponse>('PUT', '/api/pihole/doh', { enabled }),
   domain: (domain: string, list: 'deny' | 'allow') => req<OkResponse>('POST', '/api/pihole/domain', { domain, list }),
   block: (rule: BlockRule) => req<OkResponse>('PUT', '/api/network/block', rule),
   unblock: (mac: string) => req<OkResponse>('DELETE', `/api/network/block/${enc(mac)}`),

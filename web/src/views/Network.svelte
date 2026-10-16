@@ -9,6 +9,7 @@
   import { duration, int } from '../lib/format'
   import type { BlockState, DeviceInfo, DnsQuery, MonitorDef, WolTarget } from '../lib/types'
   import { onDestroy } from 'svelte'
+  import { CATEGORY_LABEL, baseDomain, categorize, type Category } from '../lib/categories'
 
   let query = $state('')
   let mac = $state('')
@@ -153,6 +154,10 @@
   function openAccess(d: DeviceInfo) {
     watching = d
     devQueries = []
+    accessTab = 'live'
+    dayQueries = null
+    catFilter = null
+    api.doh().then((s) => (dohSet = new Set(s.domains))).catch(() => {})
     loadDevQueries()
     clearInterval(devTimer)
     devTimer = setInterval(loadDevQueries, 3000)
@@ -162,18 +167,61 @@
     clearInterval(devTimer)
   }
   onDestroy(() => clearInterval(devTimer))
-  // Domínio "principal" (ex.: i.ytimg.com → ytimg.com) para agrupar o ranking.
-  // Domínios de país com 2º nível (com.br, gov.br, co.uk…) mantêm 3 partes: mercadolivre.com.br, não "com.br".
-  const base = (d: string) => {
-    const p = d.split('.')
-    const n = p.length >= 3 && p[p.length - 1].length === 2 && p[p.length - 2].length <= 3 ? 3 : 2
-    return p.slice(-n).join('.')
-  }
+  // Ranking pelo domínio "principal" (i.ytimg.com → ytimg.com; mercadolivre.com.br mantém 3 partes).
   const topDomains = $derived.by(() => {
     const m = new Map<string, number>()
-    for (const q of devQueries) m.set(base(q.domain), (m.get(base(q.domain)) ?? 0) + 1)
+    for (const q of devQueries) m.set(baseDomain(q.domain), (m.get(baseDomain(q.domain)) ?? 0) + 1)
     return [...m].sort((a, b) => b[1] - a[1]).slice(0, 12)
   })
+
+  // ── Últimas 24 h: atividade por hora, categorias e mais acessados ──
+  let accessTab = $state<'live' | 'day'>('live')
+  let dayQueries = $state.raw<DnsQuery[] | null>(null)
+  let dohSet = $state.raw<Set<string>>(new Set())
+  let catFilter = $state<Category | null>(null)
+  async function showDay() {
+    accessTab = 'day'
+    if (!watching) return
+    try { dayQueries = await api.queries(watching.ip, 24) } catch { dayQueries = dayQueries ?? [] }
+  }
+  const dohUsed = $derived([...new Set([...devQueries, ...(dayQueries ?? [])]
+    .filter((q) => dohSet.has(q.domain.toLowerCase())).map((q) => q.domain.toLowerCase()))])
+  const hours = $derived.by(() => {
+    const end = (Math.floor(Date.now() / 3_600_000) + 1) * 3600 // fim da hora atual
+    const b = Array.from({ length: 24 }, (_, i) => ({ t: end - (24 - i) * 3600, total: 0, blocked: 0 }))
+    for (const q of dayQueries ?? []) {
+      const i = Math.floor((q.ts - (end - 86400)) / 3600)
+      if (i < 0 || i > 23) continue
+      b[i].total++
+      if (q.blocked) b[i].blocked++
+    }
+    return b
+  })
+  const maxHour = $derived(Math.max(1, ...hours.map((h) => h.total)))
+  const hh = (t: number) => `${new Date(t * 1000).getHours().toString().padStart(2, '0')}h`
+  const cats = $derived.by(() => {
+    const m = new Map<Category, number>()
+    for (const q of dayQueries ?? []) {
+      const c = categorize(q.domain, dohSet)
+      m.set(c, (m.get(c) ?? 0) + 1)
+    }
+    const total = dayQueries?.length || 1
+    return [...m].map(([cat, n]) => ({ cat, n, pct: (100 * n) / total })).sort((a, b) => b.n - a.n)
+  })
+  const dayTop = $derived.by(() => {
+    const m = new Map<string, { n: number; cat: Category }>()
+    for (const q of dayQueries ?? []) {
+      const cat = categorize(q.domain, dohSet)
+      if (catFilter && cat !== catFilter) continue
+      const d = baseDomain(q.domain)
+      const cur = m.get(d)
+      // Etiqueta pelo domínio principal (microsoft.com = sistema, mesmo que a 1ª consulta tenha sido teams.microsoft.com).
+      const own = categorize(d, dohSet)
+      m.set(d, { n: (cur?.n ?? 0) + 1, cat: cur?.cat ?? (own === 'other' ? cat : own) })
+    }
+    return [...m].map(([domain, v]) => ({ domain, ...v })).sort((a, b) => b.n - a.n).slice(0, 15)
+  })
+  const dayBlocked = $derived(dayQueries?.filter((q) => q.blocked).length ?? 0)
   const devShown = $derived(devQueries.filter((q) => !onlyBlockedDev || q.blocked).slice(0, 150))
   const hms = (t: number) => new Date(t * 1000).toLocaleTimeString('pt-BR', { hour12: false })
 
@@ -338,8 +386,54 @@
 
 {#if watching}
   <Modal title={`Acessos · ${label(watching)}`} onclose={closeAccess}>
-    <p class="dim small">Consultas DNS deste aparelho ({watching.ip}) registradas pelo Pi-hole, atualizadas a cada 3 s. Mostra os sites/serviços contatados — não o conteúdo das páginas.</p>
-    {#if devQueries.length === 0}
+    <p class="dim small">Consultas DNS deste aparelho ({watching.ip}) registradas pelo Pi-hole. Mostra os sites/serviços contatados — não o conteúdo das páginas.</p>
+    <div class="tabs">
+      <button class="btn mini" class:on={accessTab === 'live'} onclick={() => (accessTab = 'live')}>Ao vivo</button>
+      <button class="btn mini" class:on={accessTab === 'day'} onclick={showDay}>Últimas 24 h</button>
+    </div>
+    {#if dohUsed.length}
+      <p class="doh-warn mono">▲ ESTE APARELHO TENTOU USAR DNS SEGURO ({dohUsed.slice(0, 2).join(', ')}) — PARTE DOS ACESSOS PODE NÃO APARECER. BLOQUEIE EM PI-HOLE → DNS SEGURO.</p>
+    {/if}
+    {#if accessTab === 'day'}
+      {#if !dayQueries}
+        <p class="empty">Carregando as últimas 24 h…</p>
+      {:else if dayQueries.length === 0}
+        <p class="empty">Nenhuma consulta nas últimas 24 h.</p>
+      {:else}
+        <div class="mono dim day-sum">
+          {int(dayQueries.length)} CONSULTAS · {Math.round((100 * dayBlocked) / dayQueries.length)}% BLOQUEADAS · ATIVO EM {hours.filter((h) => h.total > 0).length} DE 24 H
+        </div>
+        <div class="hours" role="img" aria-label="Consultas por hora nas últimas 24 horas">
+          {#each hours as h (h.t)}
+            <div class="hcol" title={`${hh(h.t)}: ${h.total} consultas, ${h.blocked} bloqueadas`}>
+              <i class="tot" style="height:{(h.total / maxHour) * 100}%"></i>
+              <i class="blk" style="height:{(h.blocked / maxHour) * 100}%"></i>
+            </div>
+          {/each}
+        </div>
+        <div class="haxis mono dim"><span>{hh(hours[0].t)}</span><span>{hh(hours[12].t)}</span><span>AGORA</span></div>
+
+        <div class="mono dim sect">POR CATEGORIA · TOQUE PARA FILTRAR</div>
+        {#each cats as c (c.cat)}
+          <button class="cat" class:on={catFilter === c.cat} onclick={() => (catFilter = catFilter === c.cat ? null : c.cat)}>
+            <span class="cname">{CATEGORY_LABEL[c.cat]}</span>
+            <span class="ctrack"><i style="width:{c.pct}%"></i></span>
+            <span class="mono num">{c.pct.toFixed(0)}%</span>
+          </button>
+        {/each}
+
+        <div class="mono dim sect">MAIS ACESSADOS{catFilter ? ` · ${CATEGORY_LABEL[catFilter].toUpperCase()}` : ''}</div>
+        <div class="dtop">
+          {#each dayTop as t (t.domain)}
+            <div class="drow">
+              <span class="dom">{t.domain}</span>
+              <span class="ctag mono">{CATEGORY_LABEL[t.cat]}</span>
+              <span class="mono num">{int(t.n)}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {:else if devQueries.length === 0}
       <p class="empty">Nenhuma consulta recente — o aparelho pode não estar usando o Pi-hole como DNS.</p>
     {:else}
       <div class="mono dim sect">MAIS ACESSADOS (ÚLTIMAS {devQueries.length} CONSULTAS)</div>
@@ -467,6 +561,25 @@
   .q .dom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .q.blk .dom { color: var(--red); }
   .btn.mini { height: 22px; padding: 0 7px; font-size: 9.5px; }
+  .tabs { display: flex; gap: 6px; margin: 4px 0 12px; }
+  .doh-warn { color: var(--red); font-size: 10.5px; line-height: 1.5; margin-bottom: 10px; }
+  .day-sum { font-size: 10.5px; margin-bottom: 8px; }
+  .hours { display: flex; align-items: flex-end; gap: 2px; height: 70px; border-bottom: 1px solid var(--line-2); }
+  .hcol { position: relative; flex: 1; height: 100%; }
+  .hcol i { position: absolute; left: 0; right: 0; bottom: 0; }
+  .hcol .tot { background: rgba(236, 235, 230, 0.4); }
+  .hcol .blk { background: var(--red); }
+  .haxis { display: flex; justify-content: space-between; font-size: 9.5px; margin: 4px 0 14px; }
+  .cat { display: grid; grid-template-columns: 170px minmax(0, 1fr) 40px; gap: 10px; align-items: center; width: 100%; padding: 5px 4px; text-align: left; font-size: 13px; border-left: 2px solid transparent; }
+  .cat.on { border-left-color: var(--red); background: rgba(255, 255, 255, 0.04); }
+  .cat .num { text-align: right; font-size: 11px; }
+  .ctrack { height: 6px; background: var(--line); }
+  .ctrack i { display: block; height: 100%; background: var(--fg-dim); }
+  .dtop { max-height: 260px; overflow: auto; }
+  .drow { display: grid; grid-template-columns: minmax(0, 1fr) auto 50px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .drow .dom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .drow .num { text-align: right; font-size: 11px; }
+  .ctag { font-size: 9px; color: var(--fg-dim); border: 1px solid var(--line-2); padding: 0 4px; white-space: nowrap; }
 
   @media (hover: none) { .pen { opacity: 1; } }
   @media (max-width: 900px) {

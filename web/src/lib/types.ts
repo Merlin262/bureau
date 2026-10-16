@@ -20,6 +20,7 @@ export interface PiHoleState {
   topBlocked: { name: string; count: number }[]; history: { t: number; total: number; blocked: number }[]
 }
 export interface DeviceInfo { ip: string; mac: string; name?: string; vendor?: string; online: boolean; iface?: string; alias?: string; randomMac: boolean; firstSeen: number; dnsQueries: number }
+export interface DohState { available: boolean; enabled: boolean; blocked: number; total: number; domains: string[] }
 export interface WolTarget { mac: string; name?: string; user?: string; lastWake: number }
 export interface WolState { targets: WolTarget[]; publicKey?: string }
 export interface OkResponse { ok: boolean; message?: string }

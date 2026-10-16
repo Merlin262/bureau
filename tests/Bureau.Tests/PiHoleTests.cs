@@ -163,7 +163,9 @@ public class PiHoleTests
         Assert.True(all[0].Blocked);
         Assert.False(all[1].Blocked);
         Assert.Null(all[1].ClientName);
-        Assert.Contains(p.Http.Requests, r => r.PathAndQuery == "/api/queries?length=1000");
+        Assert.Contains(p.Http.Requests, r => r.PathAndQuery == "/api/queries?length=5000");
+        await p.Fx.PiHole.QueriesAsync(50_000);
+        Assert.Contains(p.Http.Requests, r => r.PathAndQuery == "/api/queries?length=10000"); // limite
 
         var one = await p.Fx.PiHole.QueriesAsync(150, "192.168.0.6");
         Assert.Single(one);

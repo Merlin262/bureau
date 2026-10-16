@@ -16,14 +16,19 @@ public sealed partial class PiHoleModule
     public bool Available => O.Enabled || Fake;
 
     // ── Consultas ao vivo ────────────────────────────────
-    /// <summary>Últimas consultas; com client, só as daquele aparelho (filtro do Pi-hole + conferência local).</summary>
-    public async Task<DnsQuery[]> QueriesAsync(int length = 150, string? client = null)
+    /// <summary>
+    /// Últimas consultas; com client, só as daquele aparelho (filtro do Pi-hole + conferência local).
+    /// Com from (unix), só a partir dali — usado no histórico de 24 h de um aparelho.
+    /// </summary>
+    public async Task<DnsQuery[]> QueriesAsync(int length = 150, string? client = null, long? from = null)
     {
-        if (Fake) return [.. DevFakes.Queries().Where(q => client is null || q.Client == client)];
+        if (Fake)
+            return [.. DevFakes.Queries(from is null ? 60 : 400, from is null ? 0 : DateTimeOffset.UtcNow.ToUnixTimeSeconds() - from.Value)
+                .Where(q => client is null || q.Client == client)];
         if (!O.Enabled) return [];
         var clientFilter = client;
-        var filter = client is null ? "" : $"&client_ip={Uri.EscapeDataString(client)}";
-        using var doc = await GetJsonAsync($"/api/queries?length={Math.Clamp(length, 10, 1000)}{filter}", CancellationToken.None);
+        var filter = (client is null ? "" : $"&client_ip={Uri.EscapeDataString(client)}") + (from is null ? "" : $"&from={from}");
+        using var doc = await GetJsonAsync($"/api/queries?length={Math.Clamp(length, 10, 10_000)}{filter}", CancellationToken.None);
         return [.. doc.RootElement.GetProperty("queries").EnumerateArray().Select(q =>
         {
             var client = q.TryGetProperty("client", out var c) ? c : default;

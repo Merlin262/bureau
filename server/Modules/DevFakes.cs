@@ -122,18 +122,19 @@ public static class DevFakes
             new("convidado", "Arrival", "Jellyfin Web", "Chrome", true, 81.2, true),
         ]);
 
-    public static DnsQuery[] Queries()
+    public static DnsQuery[] Queries(int count = 60, long span = 0)
     {
         string[] domains = ["www.google.com", "graph.facebook.com", "api.spotify.com", "ads.youtube.com", "telemetry.microsoft.com",
-            "i.ytimg.com", "doubleclick.net", "github.com", "app-measurement.com", "connectivitycheck.gstatic.com", "netflix.com", "tracking.tiktok.com"];
+            "i.ytimg.com", "doubleclick.net", "github.com", "app-measurement.com", "connectivitycheck.gstatic.com", "netflix.com", "tracking.tiktok.com",
+            "www.instagram.com", "rr3---sn-x1x.googlevideo.com", "teams.microsoft.com", "store.steampowered.com", "dns.google"];
         (string Ip, string Name)[] clients = [("192.168.0.10", "desktop-sala"), ("192.168.0.23", "celular"), ("192.168.0.31", "tv-sala")];
         var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        return [.. Enumerable.Range(0, 60).Select(i =>
+        return [.. Enumerable.Range(0, count).Select(i =>
         {
             var d = domains[Random.Shared.Next(domains.Length)];
             var c = clients[Random.Shared.Next(clients.Length)];
             var blocked = d.Contains("ads") || d.Contains("telemetry") || d.Contains("doubleclick") || d.Contains("tracking") || d.Contains("measurement");
-            return new DnsQuery(now - i * Random.Shared.Next(1, 9), d, i % 5 == 0 ? "AAAA" : "A", c.Ip, c.Name, blocked ? "GRAVITY" : i % 3 == 0 ? "CACHE" : "FORWARDED", blocked);
+            return new DnsQuery(span > 0 ? now - Random.Shared.NextInt64(span) : now - i * Random.Shared.Next(1, 9), d, i % 5 == 0 ? "AAAA" : "A", c.Ip, c.Name, blocked ? "GRAVITY" : i % 3 == 0 ? "CACHE" : "FORWARDED", blocked);
         })];
     }
 

@@ -70,6 +70,9 @@ public sealed record JfState(bool Configured, bool Online, string? Error, string
 public sealed record EntityRequest(string EntityId);
 public sealed record DnsQuery(long Ts, string Domain, string Type, string Client, string? ClientName, string Status, bool Blocked);
 public sealed record DomainRequest(string Domain, string List);
+/// <summary>Bloqueio de "DNS seguro" (DoH/DoT): quantos dos domínios conhecidos estão na lista de bloqueio.</summary>
+public sealed record DohState(bool Available, bool Enabled, int Blocked, int Total, string[] Domains);
+public sealed record DohRequest(bool Enabled);
 public sealed record BlockRule(string Mac, string? Label, bool Manual, int[] Days, string? Start, string? End);
 public sealed record BlockState(string Mac, string? Label, bool Manual, int[] Days, string? Start, string? End, bool Active, string? Error);
 public sealed record BackupBundle(string Kind, int Version, long Created, string Host, string AppVersion,
@@ -106,6 +109,8 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(BackupBundle))]
 [JsonSerializable(typeof(DnsQuery[]))]
 [JsonSerializable(typeof(DomainRequest))]
+[JsonSerializable(typeof(DohState))]
+[JsonSerializable(typeof(DohRequest))]
 [JsonSerializable(typeof(BlockRule))]
 [JsonSerializable(typeof(BlockRule[]))]
 [JsonSerializable(typeof(BlockState[]))]

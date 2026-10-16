@@ -88,6 +88,7 @@ public class ApiTests : IClassFixture<ApiFixture>
     public ApiTests(ApiFixture f) => _f = f;
 
     ApiFactory App => _f.App;
+    static int PiHoleDohTotal => Bureau.Modules.PiHoleModule.DohDomains.Length;
     HttpClient C => _f.Client;
     static CancellationToken Ct => TestContext.Current.CancellationToken;
 
@@ -258,6 +259,9 @@ public class ApiTests : IClassFixture<ApiFixture>
         Assert.Equal(JsonValueKind.Array, (await Get("/api/pihole/queries")).ValueKind);
         Assert.Equal(JsonValueKind.Array, (await Get("/api/pihole/queries?client=192.168.0.10")).ValueKind);
         Assert.Equal(JsonValueKind.Array, (await Get("/api/pihole/queries?client=lixo")).ValueKind);
+        Assert.Equal(JsonValueKind.Array, (await Get("/api/pihole/queries?client=192.168.0.10&hours=48")).ValueKind);
+        Assert.Equal(PiHoleDohTotal, (await Get("/api/pihole/doh")).GetProperty("total").GetInt32());
+        Assert.True((await Send(HttpMethod.Put, "/api/pihole/doh", new { enabled = false })).TryGetProperty("ok", out _));
         Assert.Equal("Domínio inválido", (await Send(HttpMethod.Post, "/api/pihole/domain", new { domain = "x", list = "deny" })).GetProperty("message").GetString());
 
         Assert.True((await Send(HttpMethod.Put, "/api/network/block", new { mac = "aa:bb:cc:dd:ee:ff", manual = true, days = Array.Empty<int>() })).GetProperty("ok").GetBoolean());

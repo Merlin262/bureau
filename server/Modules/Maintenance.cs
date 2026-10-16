@@ -92,8 +92,9 @@ public sealed class AptModule(EventHub hub, AlertEngine alerts, IOptionsMonitor<
     {
         var set = new HashSet<string>();
         string? current = null;
-        foreach (var line in output.Split('\n'))
+        foreach (var raw in output.Split('\n'))
         {
+            var line = raw.TrimEnd('\r');
             if (line.Length > 0 && !char.IsWhiteSpace(line[0]) && line.EndsWith(':')) current = line[..^1].Split(':')[0];
             else if (current is not null && line.Contains("(phased")) set.Add(current);
         }

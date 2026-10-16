@@ -216,9 +216,17 @@ public static class Api
         api.MapPost("/homeassistant/toggle", async (EntityRequest req, HomeAssistantModule h) => TypedResults.Ok(await h.ToggleAsync(req.EntityId)));
 
         // ── Pi-hole interativo / bloqueio de aparelhos ──────
-        api.MapGet("/pihole/queries", async (string? client, PiHoleModule p) =>
-            TypedResults.Ok(await p.QueriesAsync(client is null ? 150 : 500,
-                client is not null && System.Net.IPAddress.TryParse(client, out _) ? client : null)));
+        api.MapGet("/pihole/queries", async (string? client, int? hours, PiHoleModule p) =>
+        {
+            var ip = client is not null && System.Net.IPAddress.TryParse(client, out _) ? client : null;
+            // Histórico de um aparelho (até 24 h): bem mais consultas que a lista ao vivo.
+            if (ip is not null && hours is > 0)
+                return TypedResults.Ok(await p.QueriesAsync(10_000, ip,
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds() - Math.Min(hours.Value, 24) * 3600L));
+            return TypedResults.Ok(await p.QueriesAsync(ip is null ? 150 : 500, ip));
+        });
+        api.MapGet("/pihole/doh", async (PiHoleModule p) => TypedResults.Ok(await p.DohStateAsync()));
+        api.MapPut("/pihole/doh", async (DohRequest req, PiHoleModule p) => TypedResults.Ok(await p.SetDohAsync(req.Enabled)));
         api.MapPost("/pihole/domain", async (DomainRequest req, PiHoleModule p) => TypedResults.Ok(await p.SetDomainAsync(req.Domain, req.List)));
         api.MapPut("/network/block", (BlockRule rule, DeviceBlocks b) => TypedResults.Ok(b.Upsert(rule)));
         api.MapDelete("/network/block/{mac}", (string mac, DeviceBlocks b) => TypedResults.Ok(b.Remove(mac)));

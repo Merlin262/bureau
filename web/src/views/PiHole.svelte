@@ -6,7 +6,7 @@
   import { api } from '../lib/api'
   import { duration, int } from '../lib/format'
   import { onDestroy } from 'svelte'
-  import type { DnsQuery } from '../lib/types'
+  import type { DnsQuery, DohState } from '../lib/types'
 
   // ── Consultas ao vivo (só enquanto esta tela está aberta) ──
   let queries = $state.raw<DnsQuery[]>([])
@@ -36,6 +36,15 @@
   const pause = (sec: number | undefined, label: string) =>
     act('ph', '', () => api.blocking(false, sec), `Bloqueio suspenso ${label}`)
   const resume = () => act('ph', '', () => api.blocking(true), 'Bloqueio reativado')
+
+  // ── DNS seguro (DoH): aparelhos que usam um DNS próprio passam por fora do Pi-hole ──
+  let doh = $state<DohState | null>(null)
+  const loadDoh = async () => { try { doh = await api.doh() } catch { /* offline */ } }
+  loadDoh()
+  async function toggleDoh() {
+    await act('doh', '', () => api.setDoh(!doh?.enabled))
+    loadDoh()
+  }
 
   let hover = $state<number | null>(null)
   const hp = $derived(hover != null ? p?.history[hover] : null)
@@ -117,6 +126,22 @@
     </Panel>
   </div>
 
+  {#if doh?.available}
+    <Panel label="DNS SEGURO (DoH)" class="doh">
+      <div class="doh-row">
+        <div>
+          <div class="name">{doh.enabled ? 'Bloqueado' : doh.blocked > 0 ? `Parcial (${doh.blocked}/${doh.total})` : 'Permitido'}</div>
+          <p class="dim small">
+            Chrome, Firefox, o "DNS privado" do Android e algumas TVs usam um DNS criptografado próprio e passam por fora do
+            Pi-hole: nada aparece em "Acessos" e os anúncios não são bloqueados. Bloquear {doh.total} provedores conhecidos faz os
+            aparelhos voltarem ao DNS da rede (serviços acessados direto por IP continuam passando).
+          </p>
+        </div>
+        <button class="btn" class:on={doh.enabled} class:busy={!!store.pending['doh']} onclick={toggleDoh}>{doh.enabled ? 'Liberar' : 'Bloquear'}</button>
+      </div>
+    </Panel>
+  {/if}
+
   <Panel label="CONSULTAS AO VIVO" class="live">
     {#snippet aside()}
       <button class="btn mini" class:on={onlyBlocked} onclick={() => (onlyBlocked = !onlyBlocked)}>Só bloqueadas</button>
@@ -171,6 +196,11 @@
   code { font-family: var(--mono); font-size: 13px; }
 
   :global(.live) { margin-top: 14px; }
+  :global(.doh) { margin-top: 14px; }
+  .doh-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  .doh-row .name { font-stretch: 80%; font-weight: 600; font-size: 17px; }
+  .doh-row .small { font-size: 13px; margin-top: 4px; max-width: 760px; }
+  @media (max-width: 560px) { .doh-row { flex-direction: column; align-items: flex-start; } }
   .qf { margin-bottom: 8px; max-width: 420px; }
   .qlist { max-height: 460px; overflow: auto; }
   .q { display: grid; grid-template-columns: 70px 130px minmax(0, 1fr) 100px 76px; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
