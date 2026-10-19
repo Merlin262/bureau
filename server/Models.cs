@@ -137,6 +137,7 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(AlertEvent))]
 [JsonSerializable(typeof(AlertEvent[]))]
 [JsonSerializable(typeof(PushDevice[]))]
+[JsonSerializable(typeof(Bureau.Push.OutboxItem[]))]
 [JsonSerializable(typeof(DeviceToken[]))]
 [JsonSerializable(typeof(TokenRequest))]
 [JsonSerializable(typeof(TokenResponse))]

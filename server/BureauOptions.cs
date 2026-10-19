@@ -23,9 +23,20 @@ public sealed class BureauOptions
     public BackupJob[] Backups { get; set; } = [];
 
     public TerminalOptions Terminal { get; set; } = new();
+    public TelemetryOptions Telemetry { get; set; } = new();
 
     /// <summary>Mostrar e aplicar atualizações de pacotes do sistema (apt).</summary>
     public bool SystemUpdates { get; set; } = true;
+}
+
+/// <summary>Observabilidade via OpenTelemetry (traces, métricas e logs).</summary>
+public sealed class TelemetryOptions
+{
+    /// <summary>
+    /// Endpoint OTLP/gRPC (ex.: http://127.0.0.1:4317 do Grafana Alloy, Collector ou grafana/otel-lgtm).
+    /// Vazio: usa OTEL_EXPORTER_OTLP_ENDPOINT; sem nenhum dos dois, a telemetria fica desligada.
+    /// </summary>
+    public string? OtlpEndpoint { get; set; }
 }
 
 /// <summary>Terminal no navegador: SSH para este usuário em 127.0.0.1 (pede a senha do Linux).</summary>

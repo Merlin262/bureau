@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Bureau.Infra;
@@ -57,37 +58,62 @@ public sealed class Notifier(PushStore store, WebPushSender web, FcmSender fcm, 
 
     public bool NtfyConfigured => !string.IsNullOrWhiteSpace(opts.CurrentValue.Push.NtfyUrl);
 
-    public async Task<int> SendAsync(AlertEvent a, string? onlyDeviceId = null)
+    /// <summary>Envia agora (teste pela interface) e devolve quantos canais aceitaram.</summary>
+    public async Task<int> SendAsync(AlertEvent a, string? onlyDeviceId = null) =>
+        (await DeliverAsync(a, [], onlyDeviceId)).Count(r => r.Result == PushResult.Ok);
+
+    /// <summary>
+    /// Entrega em cada destino (aparelhos e ntfy), pulando os que já receberam este alerta
+    /// numa tentativa anterior — assim um retry não duplica a notificação em quem já recebeu.
+    /// </summary>
+    public async Task<DeliveryResult[]> DeliverAsync(AlertEvent a, IReadOnlyCollection<string> skip,
+        string? onlyDeviceId = null, CancellationToken ct = default)
     {
-        var targets = store.All.Where(d => onlyDeviceId is null || d.Id == onlyDeviceId);
-        var results = await Task.WhenAll(targets.Select(async d =>
+        var targets = store.All.Where(d => (onlyDeviceId is null || d.Id == onlyDeviceId) && !skip.Contains(d.Id))
+            .Select(d => (Target: d.Id, Channel: d.Kind, Send: (Func<Task<PushResult>>)(() => SendDeviceAsync(d, a, ct))))
+            .ToList();
+        if (onlyDeviceId is null && NtfyConfigured && !skip.Contains(NtfyTarget))
+            targets.Add((NtfyTarget, "ntfy", async () => await SendNtfyAsync(a) ? PushResult.Ok : PushResult.Failed));
+
+        return await Task.WhenAll(targets.Select(async t =>
         {
-            try
-            {
-                var r = d.Kind switch
-                {
-                    "webpush" => await web.SendAsync(d, a),
-                    "fcm" => await fcm.SendAsync(d, a),
-                    "apns" => await apns.SendAsync(d, a),
-                    _ => PushResult.Gone,
-                };
-                if (r == PushResult.Gone)
-                {
-                    store.Remove(d.Id);
-                    log.LogInformation("Inscrição de push expirada removida: {Name}", d.Name);
-                }
-                return r == PushResult.Ok ? 1 : 0;
-            }
+            using var span = Telemetry.Source.StartActivity("push.send", ActivityKind.Client);
+            span?.SetTag("push.channel", t.Channel);
+            var start = Stopwatch.GetTimestamp();
+            PushResult r;
+            try { r = await t.Send(); }
             catch (Exception e)
             {
-                log.LogWarning(e, "Falha ao enviar push para {Name}", d.Name);
-                return 0;
+                log.LogWarning(e, "Falha ao enviar push para {Target}", t.Target);
+                span?.AddException(e);
+                r = PushResult.Failed;
             }
+            var tags = new TagList { { "channel", t.Channel }, { "result", r.ToString().ToLowerInvariant() } };
+            Telemetry.PushDeliveries.Add(1, tags);
+            Telemetry.PushDuration.Record(Stopwatch.GetElapsedTime(start).TotalSeconds, tags);
+            span?.SetTag("push.result", r.ToString());
+            if (r == PushResult.Failed) span?.SetStatus(ActivityStatusCode.Error);
+            return new DeliveryResult(t.Target, t.Channel, r);
         }));
+    }
 
-        var sent = results.Sum();
-        if (onlyDeviceId is null && await SendNtfyAsync(a)) sent++;
-        return sent;
+    public const string NtfyTarget = "ntfy";
+
+    async Task<PushResult> SendDeviceAsync(PushDevice d, AlertEvent a, CancellationToken ct)
+    {
+        var r = d.Kind switch
+        {
+            "webpush" => await web.SendAsync(d, a, ct),
+            "fcm" => await fcm.SendAsync(d, a, ct),
+            "apns" => await apns.SendAsync(d, a, ct),
+            _ => PushResult.Gone,
+        };
+        if (r == PushResult.Gone)
+        {
+            store.Remove(d.Id);
+            log.LogInformation("Inscrição de push expirada removida: {Name}", d.Name);
+        }
+        return r;
     }
 
     async Task<bool> SendNtfyAsync(AlertEvent a)
@@ -128,3 +154,6 @@ public sealed class Notifier(PushStore store, WebPushSender web, FcmSender fcm, 
         }
     }
 }
+
+/// <summary>Resultado da entrega para um destino (Id do aparelho ou "ntfy").</summary>
+public sealed record DeliveryResult(string Target, string Channel, PushResult Result);

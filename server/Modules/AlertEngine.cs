@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using Bureau.Infra;
 using Bureau.Push;
 using Microsoft.Extensions.Options;
@@ -16,6 +17,7 @@ public sealed class AlertEngine
 
     readonly EventHub _hub;
     readonly Notifier _notifier;
+    readonly AlertOutbox _outbox;
     readonly IOptionsMonitor<BureauOptions> _opts;
     readonly ILogger<AlertEngine> _log;
     readonly string _path;
@@ -40,12 +42,13 @@ public sealed class AlertEngine
 
     readonly TimeProvider _time;
 
-    public AlertEngine(EventHub hub, Notifier notifier, IOptionsMonitor<BureauOptions> opts, ILogger<AlertEngine> log,
+    public AlertEngine(EventHub hub, Notifier notifier, AlertOutbox outbox, IOptionsMonitor<BureauOptions> opts, ILogger<AlertEngine> log,
         TimeProvider? time = null)
     {
         _time = time ?? TimeProvider.System;
         _hub = hub;
         _notifier = notifier;
+        _outbox = outbox;
         _opts = opts;
         _log = log;
         _path = Path.Combine(opts.CurrentValue.DataDir, "alerts.json");
@@ -329,7 +332,9 @@ public sealed class AlertEngine
         PublishRecent();
 
         _log.LogWarning("ALERTA [{Level}] {Title} — {Body}", level, title, body);
-        if (O.Enabled) _ = _notifier.SendAsync(alert);
+        Telemetry.AlertsRaised.Add(1, new TagList { { "kind", kind }, { "level", level } });
+        // Entrega fica com a outbox (durável, com retry): aqui só registra, sem rede dentro do lock.
+        if (O.Enabled) _outbox.Enqueue(alert);
     }
 
     void PublishRecent() => _hub.Publish("alerts", _recent.AsEnumerable().Reverse().ToArray(), AppJson.Default.AlertEventArray);

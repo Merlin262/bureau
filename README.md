@@ -98,6 +98,7 @@ Baixe o `bureau-android.apk` da release, informe o endereço do servidor e a sen
 | `HomeAssistant.Enabled` / `Url` / `Token` / `Entities` | `false` / `http://127.0.0.1:8123` / — / `[]` | Token de longa duração; `Entities` escolhe o que aparece (vazio: luzes, interruptores, ventiladores) |
 | `Jellyfin.Enabled` / `Url` / `ApiKey` | `false` / `http://127.0.0.1:8096` / — | Chave em Painel → Avançado → Chaves de API |
 | `Backups` | `[]` | Lista de `{ "Name", "Unit", "MaxAgeHours" }` — serviços systemd de backup (restic, borg, rsync…) |
+| `Telemetry.OtlpEndpoint` | — | Endpoint OTLP/gRPC para traces, métricas e logs (ex.: Grafana) — veja [docs/observabilidade.md](docs/observabilidade.md) |
 | `SystemUpdates` | `true` | Mostra/aplica atualizações de pacotes (apt) |
 | `Terminal.Enabled` / `User` / `Port` | `false` / — / `22` | Terminal no navegador/app: SSH para esse usuário em 127.0.0.1 (pede a senha do Linux) |
 

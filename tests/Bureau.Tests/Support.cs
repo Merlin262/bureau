@@ -65,7 +65,8 @@ public sealed class Fx : IDisposable
     public ApnsSender Apns => field ??= new ApnsSender(Monitor, Log<ApnsSender>());
     public Notifier Notifier => field ??= new Notifier(Push, Web, Fcm, Apns, Monitor, Log<Notifier>());
     public Microsoft.Extensions.Time.Testing.FakeTimeProvider Time { get; } = new(DateTimeOffset.UtcNow);
-    public AlertEngine Alerts => field ??= new AlertEngine(Hub, Notifier, Monitor, Log<AlertEngine>(), Time);
+    public AlertOutbox Outbox => field ??= new AlertOutbox(Notifier, Opt, Log<AlertOutbox>(), Time);
+    public AlertEngine Alerts => field ??= new AlertEngine(Hub, Notifier, Outbox, Monitor, Log<AlertEngine>(), Time);
     public PiHoleModule PiHole => field ??= new PiHoleModule(Hub, Alerts, Monitor, Log<PiHoleModule>());
     public NetworkModule Network => field ??= new NetworkModule(Hub, PiHole, Alerts, Opt);
 
