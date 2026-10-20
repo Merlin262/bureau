@@ -19,5 +19,6 @@
   "Backups": [ { "Name": "Fotos", "Unit": "restic-fotos.service", "MaxAgeHours": 26 } ],
   "SystemUpdates": true,
   "Terminal": { "Enabled": false, "User": "seu-usuario-linux", "Port": 22 },
+  "Telemetry": { "OtlpEndpoint": "" },
   "Logging": { "LogLevel": { "Default": "Warning", "bureau": "Information", "Microsoft.Hosting.Lifetime": "Information" } }
 }

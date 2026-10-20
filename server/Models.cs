@@ -84,6 +84,8 @@ public sealed record AccessEntry(long Ts, string Ip, string? Country, string Met
 
 // ── Alertas / Push / Aparelhos ───────────────────────────
 public sealed record AlertEvent(long Ts, string Kind, string Level, string Title, string Body, string View);
+/// <summary>Alerta aguardando entrega, como a interface mostra (Sistema → Notificações).</summary>
+public sealed record OutboxEntry(string Title, string Level, int Attempts, long NextAttemptAt, string[] Failing);
 public sealed record PushDevice(string Id, string Kind, string Name, string? Token, string? Endpoint, string? P256dh, string? Auth, string? Owner, long Created);
 public sealed record DeviceToken(string Id, string Name, string Hash, long Created);
 public sealed record TokenRequest(string? Password, string? Name);
@@ -137,6 +139,8 @@ public sealed record DeviceSummary(string Id, string Name, string Kind, long Cre
 [JsonSerializable(typeof(AlertEvent))]
 [JsonSerializable(typeof(AlertEvent[]))]
 [JsonSerializable(typeof(PushDevice[]))]
+[JsonSerializable(typeof(Bureau.Push.OutboxItem[]))]
+[JsonSerializable(typeof(OutboxEntry[]))]
 [JsonSerializable(typeof(DeviceToken[]))]
 [JsonSerializable(typeof(TokenRequest))]
 [JsonSerializable(typeof(TokenResponse))]

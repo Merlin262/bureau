@@ -244,7 +244,7 @@ public class AlertEngineTests : IDisposable
 
         // Nova instância (reinício) lê os alertas salvos.
         var hub = new EventHub();
-        _ = new Bureau.Modules.AlertEngine(hub, _fx.Notifier, _fx.Monitor, Fx.Log<Bureau.Modules.AlertEngine>());
+        _ = new Bureau.Modules.AlertEngine(hub, _fx.Notifier, _fx.Outbox, _fx.Monitor, Fx.Log<Bureau.Modules.AlertEngine>());
         Assert.Equal(4, hub.Require("alerts").GetArrayLength());
     }
 

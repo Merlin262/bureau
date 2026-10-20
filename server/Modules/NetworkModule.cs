@@ -260,7 +260,9 @@ public sealed class Collectors(EventHub hub, ServicesModule services, DockerModu
             var seconds = activeSec;
             try
             {
-                await refresh(ct);
+                // Raiz do trace: um alerta disparado nesta coleta vira filho deste span.
+                using (Telemetry.Source.StartActivity($"collect {name}"))
+                    await refresh(ct);
                 seconds = hub.Count > 0 ? activeSec : idleSec;
                 // Acorda antes do intervalo se um novo cliente conectar.
                 await Task.WhenAny(Task.Delay(TimeSpan.FromSeconds(seconds), ct), hub.NextJoin);

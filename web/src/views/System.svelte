@@ -58,6 +58,19 @@
   }
   loadDevices()
 
+  // Fila de entrega: contagem regressiva até a próxima tentativa (relógio só roda com itens na fila).
+  let now = $state(Date.now())
+  $effect(() => {
+    if (!store.outbox.length) return
+    now = Date.now()
+    const t = setInterval(() => (now = Date.now()), 1000)
+    return () => clearInterval(t)
+  })
+  const nextIn = (ms: number) => {
+    const s = Math.round((ms - now) / 1000)
+    return s > 0 ? `nova tentativa em ${duration(s)}` : 'tentando agora…'
+  }
+
   async function togglePush() {
     await act('push', '', async () => {
       const r = pushOn ? await disablePush() : await enablePush()
@@ -286,6 +299,19 @@
       <span>APPLE <b class:off={!cfg?.apns}>{cfg?.apns ? '●' : '○'}</b></span>
       <span>NTFY <b class:off={!cfg?.ntfy}>{cfg?.ntfy ? '●' : '○'}</b></span>
     </div>
+    <div class="outbox">
+      {#if store.outbox.length}
+        <div class="mono red qhead">FILA DE ENTREGA · {store.outbox.length} AGUARDANDO</div>
+        {#each store.outbox as q, i (i)}
+          <div class="qi">
+            <span class="name">{q.title}</span>
+            <span class="mono dim">{q.attempts ? `${q.attempts} falha(s)${q.failing.length ? ` · ${q.failing.join(', ').toUpperCase()}` : ''} · ${nextIn(q.nextAttemptAt)}` : 'enviando…'}</span>
+          </div>
+        {/each}
+      {:else}
+        <div class="mono dim qhead">FILA DE ENTREGA · VAZIA</div>
+      {/if}
+    </div>
   </Panel>
 
   <Panel label="APARELHOS">
@@ -437,6 +463,11 @@
   .chans { display: flex; gap: 18px; margin-top: 14px; flex-wrap: wrap; }
   .chans b { color: var(--fg); font-weight: 400; }
   .chans b.off { color: var(--fg-mute); }
+  .outbox { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .qhead { font-size: 11px; }
+  .qi { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .qi .name { font-size: 15px; }
+  .qi .mono { font-size: 11px; }
   .dev { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
   .cur { font-size: 11px; }
   :global(.access) { margin-bottom: 14px; }

@@ -6,6 +6,12 @@ using Bureau.Push;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
+using OpenTelemetry;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var configPath = ConfigPaths.Resolve();
 
@@ -61,6 +67,32 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto);
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJson.Default));
 
+// Observabilidade: traces, métricas e logs via OTLP (Grafana Tempo/Mimir/Loki, Collector…). Só liga com endpoint.
+var otlp = opts.Telemetry.OtlpEndpoint ?? Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+if (!string.IsNullOrWhiteSpace(otlp))
+{
+    // Conexões longas (SSE e terminal) virariam spans de horas: ficam fora dos traces.
+    static bool Traced(HttpContext ctx) =>
+        !ctx.Request.Path.StartsWithSegments("/api/stream") && !ctx.Request.Path.StartsWithSegments("/api/terminal/ws");
+
+    builder.Logging.AddOpenTelemetry(l => { l.IncludeFormattedMessage = true; l.IncludeScopes = true; });
+    var otel = builder.Services.AddOpenTelemetry()
+        .ConfigureResource(r => r.AddService("bureau", serviceVersion: typeof(Program).Assembly.GetName().Version?.ToString()))
+        .WithTracing(t => t
+            .AddSource(Telemetry.Name)
+            .AddAspNetCoreInstrumentation(o => o.Filter = Traced)
+            .AddHttpClientInstrumentation())
+        .WithMetrics(m => m
+            .AddMeter(Telemetry.Name)
+            .AddMeter("System.Runtime") // GC, threads, memória (nativo no .NET 9+)
+            .AddAspNetCoreInstrumentation()
+            .AddHttpClientInstrumentation());
+    if (!string.IsNullOrWhiteSpace(opts.Telemetry.OtlpEndpoint))
+        otel.UseOtlpExporter(OtlpExportProtocol.Grpc, new Uri(opts.Telemetry.OtlpEndpoint));
+    else
+        otel.UseOtlpExporter(); // lê OTEL_EXPORTER_OTLP_* do ambiente
+}
+
 builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<WatchStore>();
 builder.Services.AddSingleton<ServicesModule>();
@@ -79,6 +111,8 @@ builder.Services.AddSingleton<WebPushSender>();
 builder.Services.AddSingleton<FcmSender>();
 builder.Services.AddSingleton<ApnsSender>();
 builder.Services.AddSingleton<Notifier>();
+builder.Services.AddSingleton<AlertOutbox>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AlertOutbox>());
 builder.Services.AddSingleton<AlertEngine>();
 builder.Services.AddSingleton<UpdateModule>();
 builder.Services.AddSingleton<AptModule>();

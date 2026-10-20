@@ -7,7 +7,7 @@ export function resetStore() {
   Object.assign(store, {
     authed: null, me: null, connected: false, host: null, sys: null,
     hist: { cpu: [], mem: [], rx: [], tx: [] }, services: null, containers: null, pihole: null, network: null,
-    alerts: [], apt: null, backups: null, homeassistant: null, jellyfin: null, monitors: null, blocks: [], wol: [],
+    alerts: [], outbox: [], apt: null, backups: null, homeassistant: null, jellyfin: null, monitors: null, blocks: [], wol: [],
     locked: false, lockError: '', pending: {}, toasts: [],
   })
 }
