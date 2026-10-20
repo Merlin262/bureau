@@ -31,6 +31,13 @@ public class OutboxTests
         var item = Assert.Single(fx.Outbox.Pending);
         Assert.Equal(1, item.Attempts);
 
+        // A interface recebe a fila pelo stream: título, tentativas e canal com falha.
+        var entry = Assert.Single(fx.Hub.Require("outbox").EnumerateArray());
+        Assert.Equal("Internet caiu", entry.GetProperty("title").GetString());
+        Assert.Equal(1, entry.GetProperty("attempts").GetInt32());
+        Assert.Equal("ntfy", entry.GetProperty("failing")[0].GetString());
+        Assert.True(entry.GetProperty("nextAttemptAt").GetInt64() > fx.Time.GetUtcNow().ToUnixTimeMilliseconds());
+
         // Antes do backoff vencer: não tenta de novo.
         Assert.Equal(0, await fx.Outbox.ProcessDueAsync(Ct));
         Assert.Equal(1, http.Count("POST", "/"));
@@ -39,6 +46,7 @@ public class OutboxTests
         fx.Time.Advance(TimeSpan.FromMinutes(1));
         Assert.Equal(1, await fx.Outbox.ProcessDueAsync(Ct));
         Assert.Empty(fx.Outbox.Pending);
+        Assert.Equal(0, fx.Hub.Require("outbox").GetArrayLength());
         Assert.Equal(2, http.Count("POST", "/"));
     }
 
@@ -107,7 +115,7 @@ public class OutboxTests
         using var fx = new Fx();
         var item = fx.Outbox.Enqueue(Alert);
 
-        var reloaded = new AlertOutbox(fx.Notifier, fx.Opt, Fx.Log<AlertOutbox>(), fx.Time);
+        var reloaded = new AlertOutbox(fx.Notifier, new EventHub(), fx.Opt, Fx.Log<AlertOutbox>(), fx.Time);
         var p = Assert.Single(reloaded.Pending);
         Assert.Equal(item.Id, p.Id);
         Assert.Equal(Alert, p.Alert);

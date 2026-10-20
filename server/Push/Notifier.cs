@@ -147,6 +147,12 @@ public sealed class Notifier(PushStore store, WebPushSender web, FcmSender fcm, 
             if (!res.IsSuccessStatusCode) log.LogWarning("ntfy {Status}: {Body}", (int)res.StatusCode, await res.Content.ReadAsStringAsync());
             return res.IsSuccessStatusCode;
         }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            // Falha de rede é esperada (e a outbox tenta de novo): uma linha basta, sem stack trace.
+            log.LogWarning("Falha ao publicar no ntfy: {Error}", e.Message);
+            return false;
+        }
         catch (Exception e)
         {
             log.LogWarning(e, "Falha ao publicar no ntfy");

@@ -26,6 +26,8 @@ export interface WolState { targets: WolTarget[]; publicKey?: string }
 export interface OkResponse { ok: boolean; message?: string }
 export interface Me { authenticated: boolean; hostname?: string; version: string; allowPower: boolean; terminal: boolean }
 export interface AlertEvent { ts: number; kind: string; level: 'crit' | 'warn' | 'ok'; title: string; body: string; view: string }
+/** Alerta aguardando entrega na outbox do servidor (nextAttemptAt em ms). */
+export interface OutboxEntry { title: string; level: 'crit' | 'warn' | 'ok'; attempts: number; nextAttemptAt: number; failing: string[] }
 export interface DeviceSummary { id: string; name: string; kind: 'app' | 'fcm' | 'apns' | 'webpush'; created: number; current: boolean }
 export interface PushConfig { webPushKey: string; fcm: boolean; ntfy: boolean; deviceId?: string; apns: boolean }
 export interface UpdateStatus { current: string; latest?: string; status: 'atualizado' | 'atualizando' | 'erro' | 'nunca'; message?: string; checkedAt: number; auto: boolean; supported: boolean }

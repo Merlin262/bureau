@@ -36,7 +36,12 @@ Para testar com Grafana (Tempo, Mimir/Prometheus e Loki num contêiner só):
 docker run -d --name lgtm -p 3000:3000 -p 4317:4317 -p 4318:4318 grafana/otel-lgtm
 ```
 
-Abra `http://localhost:3000` (admin/admin) → *Explore*.
+Abra `http://localhost:3000` (admin/admin) → *Explore*, ou importe o dashboard pronto
+[`grafana-bureau.json`](grafana-bureau.json) (*Dashboards → New → Import*). Para ver as métricas mudando
+ao vivo, rode com `OTEL_METRIC_EXPORT_INTERVAL=5000` (o padrão é 60 s).
+
+A fila também aparece na interface, em *Sistema → Notificações → Fila de entrega*: cada alerta pendente com
+o número de falhas, os canais que falharam e a contagem regressiva até a próxima tentativa.
 
 ### Traces
 

@@ -21,8 +21,10 @@ public static class Telemetry
     public static readonly Counter<long> PushDeliveries =
         Meter.CreateCounter<long>("bureau.push.deliveries", "{delivery}", "Tentativas de entrega de push por canal e resultado");
 
+    // Buckets em segundos: os padrões do OpenTelemetry (0, 5, 10… 10000) pensam em milissegundos.
     public static readonly Histogram<double> PushDuration =
-        Meter.CreateHistogram<double>("bureau.push.duration", "s", "Duração de cada entrega de push");
+        Meter.CreateHistogram("bureau.push.duration", "s", "Duração de cada entrega de push", tags: null,
+            advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = [0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15] });
 
     public static readonly Counter<long> OutboxRetries =
         Meter.CreateCounter<long>("bureau.outbox.retries", "{retry}", "Alertas reagendados após falha de entrega");
@@ -37,5 +39,6 @@ public static class Telemetry
         Meter.CreateObservableGauge("bureau.outbox.pending", () => OutboxPending(), "{alert}", "Alertas aguardando entrega");
 
     public static readonly Histogram<double> OutboxLag =
-        Meter.CreateHistogram<double>("bureau.outbox.lag", "s", "Tempo entre o alerta disparar e ser entregue");
+        Meter.CreateHistogram("bureau.outbox.lag", "s", "Tempo entre o alerta disparar e ser entregue", tags: null,
+            advice: new InstrumentAdvice<double> { HistogramBucketBoundaries = [0.5, 1, 5, 15, 30, 60, 120, 300, 600, 1800, 3600, 7200] });
 }

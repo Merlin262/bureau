@@ -1,4 +1,4 @@
-import type { AlertEvent, AptState, BackupInfo, BlockState, HaState, JfState, MonitorState, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot, WolTarget } from './types'
+import type { AlertEvent, AptState, BackupInfo, BlockState, HaState, JfState, MonitorState, OutboxEntry, ContainersState, DeviceInfo, History, HostInfo, Me, OkResponse, PiHoleState, ServiceInfo, SystemSnapshot, WolTarget } from './types'
 import { sfx } from './sfx'
 import { openStream } from './sse'
 import { conn, isNative, tap } from './platform'
@@ -20,6 +20,8 @@ class Store {
   pihole = $state.raw<PiHoleState | null>(null)
   network = $state.raw<DeviceInfo[] | null>(null)
   alerts = $state.raw<AlertEvent[]>([])
+  /** Alertas ainda não entregues (o servidor tenta de novo com backoff). */
+  outbox = $state.raw<OutboxEntry[]>([])
   apt = $state.raw<AptState | null>(null)
   backups = $state.raw<BackupInfo[] | null>(null)
   homeassistant = $state.raw<HaState | null>(null)
@@ -79,6 +81,7 @@ const handlers: Record<string, (v: never) => void> = {
   monitors: (v: MonitorState[]) => (store.monitors = v),
   blocks: (v: BlockState[]) => (store.blocks = v),
   wol: (v: WolTarget[]) => (store.wol = v),
+  outbox: (v: OutboxEntry[]) => (store.outbox = v),
   alerts: (v: AlertEvent[]) => {
     // Alerta novo enquanto a interface está aberta → aviso na tela também.
     const fresh = v.filter((a) => a.ts > lastAlertTs)

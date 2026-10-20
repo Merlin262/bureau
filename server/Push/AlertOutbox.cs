@@ -7,8 +7,9 @@ namespace Bureau.Push;
 /// <summary>Alerta aguardando entrega (DataDir/outbox.json).</summary>
 /// <param name="Delivered">Destinos que já receberam (Id do aparelho ou "ntfy"): o retry não repete neles.</param>
 /// <param name="TraceParent">Contexto W3C de quem disparou o alerta, para o trace atravessar a fila.</param>
+/// <param name="Failing">Canais que falharam na última tentativa (mostrado na interface).</param>
 public sealed record OutboxItem(string Id, AlertEvent Alert, long CreatedAt, int Attempts, long NextAttemptAt,
-    string[] Delivered, string? TraceParent);
+    string[] Delivered, string? TraceParent, string[]? Failing = null);
 
 /// <summary>
 /// Outbox de alertas: o motor de alertas só grava o alerta aqui (rápido e durável) e este worker
@@ -23,6 +24,7 @@ public sealed class AlertOutbox : BackgroundService
     static readonly TimeSpan MaxDelay = TimeSpan.FromMinutes(30);
 
     readonly Notifier _notifier;
+    readonly EventHub _hub;
     readonly ILogger<AlertOutbox> _log;
     readonly TimeProvider _time;
     readonly string _path;
@@ -30,14 +32,16 @@ public sealed class AlertOutbox : BackgroundService
     readonly List<OutboxItem> _items;
     TaskCompletionSource _wake = NewTcs();
 
-    public AlertOutbox(Notifier notifier, IOptions<BureauOptions> o, ILogger<AlertOutbox> log, TimeProvider? time = null)
+    public AlertOutbox(Notifier notifier, EventHub hub, IOptions<BureauOptions> o, ILogger<AlertOutbox> log, TimeProvider? time = null)
     {
         _notifier = notifier;
+        _hub = hub;
         _log = log;
         _time = time ?? TimeProvider.System;
         _path = Path.Combine(o.Value.DataDir, "outbox.json");
         _items = [.. JsonFile.Load(_path, AppJson.Default.OutboxItemArray) ?? []];
         Telemetry.OutboxPending = () => Pending.Length;
+        Publish();
     }
 
     public OutboxItem[] Pending { get { lock (_lock) return [.. _items]; } }
@@ -64,6 +68,7 @@ public sealed class AlertOutbox : BackgroundService
                 _log.LogWarning("Outbox cheia: {Count} alerta(s) antigo(s) descartado(s)", dropped);
             }
             Save();
+            Publish();
         }
         Interlocked.Exchange(ref _wake, NewTcs()).TrySetResult();
         return item;
@@ -111,6 +116,7 @@ public sealed class AlertOutbox : BackgroundService
                 if (updated is null) { _items.RemoveAt(idx); done++; }
                 else _items[idx] = updated;
                 Save();
+                Publish();
             }
         }
         return done;
@@ -130,7 +136,7 @@ public sealed class AlertOutbox : BackgroundService
         catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
         {
             _log.LogWarning(e, "Falha ao entregar alerta {Title}", item.Alert.Title);
-            results = [new DeliveryResult("?", "?", PushResult.Failed)];
+            results = [new DeliveryResult("?", "interno", PushResult.Failed)];
         }
 
         // Gone: inscrição expirou e já foi removida, não adianta tentar de novo.
@@ -159,7 +165,8 @@ public sealed class AlertOutbox : BackgroundService
         Telemetry.OutboxRetries.Add(1);
         _log.LogInformation("Alerta {Title}: {Failed} destino(s) falharam, nova tentativa em {Delay}",
             item.Alert.Title, failed, delay);
-        return item with { Attempts = attempts, NextAttemptAt = Now + (long)delay.TotalMilliseconds, Delivered = delivered };
+        var failing = results.Where(r => r.Result == PushResult.Failed).Select(r => r.Channel).Distinct().ToArray();
+        return item with { Attempts = attempts, NextAttemptAt = Now + (long)delay.TotalMilliseconds, Delivered = delivered, Failing = failing };
     }
 
     /// <summary>15 s, 30 s, 1 min… até 30 min, com ±20% de jitter para não sincronizar tentativas.</summary>
@@ -168,6 +175,11 @@ public sealed class AlertOutbox : BackgroundService
         var seconds = Math.Min(BaseDelay.TotalSeconds * Math.Pow(2, attempt - 1), MaxDelay.TotalSeconds);
         return TimeSpan.FromSeconds(seconds * (0.8 + Random.Shared.NextDouble() * 0.4));
     }
+
+    /// <summary>Estado da fila para a interface (tópico "outbox" do stream). Chamado com o lock.</summary>
+    void Publish() => _hub.Publish("outbox",
+        _items.Select(i => new OutboxEntry(i.Alert.Title, i.Alert.Level, i.Attempts, i.NextAttemptAt, i.Failing ?? [])).ToArray(),
+        AppJson.Default.OutboxEntryArray);
 
     void Save()
     {

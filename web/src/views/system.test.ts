@@ -177,6 +177,31 @@ describe('Sistema', () => {
     expect(container.textContent).toContain('(exit-code)')
   })
 
+  it('fila de entrega: alertas aguardando nova tentativa', async () => {
+    routes()
+    store.me = me()
+    store.host = host()
+    const { container } = render(System)
+    await flush()
+    expect(container.textContent).toContain('FILA DE ENTREGA · VAZIA')
+
+    store.outbox = [
+      { title: 'Internet caiu', level: 'crit', attempts: 2, nextAttemptAt: Date.now() + 34_500, failing: ['ntfy', 'fcm'] },
+      { title: 'Disco cheio', level: 'warn', attempts: 1, nextAttemptAt: Date.now() - 1000, failing: [] },
+      { title: 'Queda de energia', level: 'crit', attempts: 0, nextAttemptAt: Date.now(), failing: [] },
+    ]
+    await flush()
+    const text = container.querySelector('.outbox')!.textContent!
+    expect(text).toContain('FILA DE ENTREGA · 3 AGUARDANDO')
+    expect(text).toMatch(/Internet caiu.*2 falha\(s\) · NTFY, FCM · nova tentativa em 3[45]s/)
+    expect(text).toContain('1 falha(s) · tentando agora…')
+    expect(text).toContain('enviando…')
+
+    store.outbox = []
+    await flush()
+    expect(container.textContent).toContain('FILA DE ENTREGA · VAZIA')
+  })
+
   it('atualizações: verificar agora acompanha até terminar', async () => {
     vi.useFakeTimers()
     routes()
